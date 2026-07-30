@@ -34,12 +34,14 @@ import type {
   ImportPreview,
   ReadingDeskApi,
 } from "../shared/types";
+import packageMetadata from "../package.json";
 import { demoApi } from "./demo";
 
-type Route = "library" | "authors" | "imports" | "insights";
+type Route = "library" | "authors" | "imports" | "insights" | "settings" | "help";
 type BookTab = "highlights" | "reflection" | "details";
 
 const api: ReadingDeskApi = window.readingDesk || demoApi;
+const appVersion = packageMetadata.version;
 function formatDate(value?: string): string {
   if (!value) return "Date unavailable";
   const date = new Date(value);
@@ -77,8 +79,8 @@ function Sidebar({ route, setRoute, vaultPath, onHide }: { route: Route; setRout
       </nav>
       <nav className="secondary-nav" aria-label="Secondary navigation">
         <NavButton active={route === "insights"} icon={<ChartBar size={23} />} label="Reading insights" onClick={() => setRoute("insights")} />
-        <NavButton icon={<Gear size={23} />} label="Settings" onClick={() => undefined} />
-        <NavButton icon={<Question size={23} />} label="Help" onClick={() => undefined} />
+        <NavButton active={route === "settings"} icon={<Gear size={23} />} label="Settings" onClick={() => setRoute("settings")} />
+        <NavButton active={route === "help"} icon={<Question size={23} />} label="Help" onClick={() => setRoute("help")} />
       </nav>
       <div className="vault-status">
         <div><CheckCircle size={17} weight="fill" /><span>Vault up to date</span></div>
@@ -430,6 +432,52 @@ function InsightsView({ snapshot }: { snapshot: AppSnapshot }) {
   );
 }
 
+function SettingsView({ snapshot, onChooseVault }: { snapshot: AppSnapshot; onChooseVault: () => Promise<void> }) {
+  return (
+    <main className="section-view settings-view">
+      <header className="section-header"><span>SETTINGS</span><h1>Your reading desk, kept local</h1><p>Choose where Reading Desk stores its Markdown library and review what the app can access.</p></header>
+      <div className="settings-grid">
+        <section className="settings-card vault-settings-card">
+          <div className="settings-card-heading"><FolderOpen size={26} weight="light" /><div><h2>Obsidian vault</h2><p>Books, authors, and import history are stored in this folder.</p></div></div>
+          <div className="vault-path-value" title={snapshot.vaultPath || undefined}>{snapshot.vaultPath}</div>
+          <button className="secondary-button" onClick={() => void onChooseVault()}><FolderOpen size={18} /> Choose a different vault</button>
+        </section>
+        <section className="settings-card">
+          <div className="settings-card-heading"><CheckCircle size={26} weight="light" /><div><h2>Privacy</h2><p>Reading Desk works without an account or cloud service.</p></div></div>
+          <ul className="settings-facts"><li>Your clippings stay on this computer.</li><li>No analytics or reading telemetry is collected.</li><li>Existing Markdown outside managed sections is preserved.</li></ul>
+        </section>
+        <section className="settings-card">
+          <div className="settings-card-heading"><BookOpen size={26} weight="light" /><div><h2>About Reading Desk</h2><p>A local companion for Kindle clippings and Obsidian.</p></div></div>
+          <dl className="about-list"><div><dt>Version</dt><dd>{appVersion}</dd></div><div><dt>Storage</dt><dd>Local Markdown</dd></div><div><dt>Platform</dt><dd>Windows desktop</dd></div></dl>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function HelpView({ onGoToImports, onGoToSettings }: { onGoToImports: () => void; onGoToSettings: () => void }) {
+  return (
+    <main className="section-view help-view">
+      <header className="section-header"><span>HELP</span><h1>From Kindle export to reading notes</h1><p>Reading Desk keeps the process simple and leaves your vault readable in any Markdown editor.</p></header>
+      <div className="help-layout">
+        <section className="help-steps">
+          <article><span>1</span><div><h2>Choose a vault</h2><p>Use a dedicated Obsidian folder so Reading Desk can keep books, authors, and import records organized.</p></div></article>
+          <article><span>2</span><div><h2>Import My Clippings.txt</h2><p>Connect your Kindle, open its documents folder, and choose the latest cumulative export.</p></div></article>
+          <article><span>3</span><div><h2>Review before adding</h2><p>Duplicates are skipped. If Kindle identity data collides with different text, Skip remains the safe default.</p></div></article>
+          <article><span>4</span><div><h2>Read and reflect</h2><p>Favorite passages, add tags, and write reflections that are saved back into ordinary Markdown.</p></div></article>
+        </section>
+        <aside className="help-aside">
+          <h2>Good to know</h2>
+          <p>Reimporting the same file does not duplicate clippings, and a shorter export never removes older material.</p>
+          <p>Your own frontmatter and writing outside Reading Desk’s managed regions stay untouched.</p>
+          <div className="help-actions"><button className="primary-button" onClick={onGoToImports}>Open Imports</button><button className="secondary-button" onClick={onGoToSettings}>Review Settings</button></div>
+          <small>Reading Desk {appVersion}</small>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
 function Onboarding({ onSelect }: { onSelect: () => Promise<void> }) {
   return (
     <main className="onboarding">
@@ -485,6 +533,8 @@ export function App() {
       {route === "authors" && <AuthorsView authors={snapshot.authors} initialName={selectedAuthorName} onOpenBook={openBook} onMerged={async () => { await refresh(); }} />}
       {route === "imports" && <ImportsView snapshot={snapshot} onCommitted={async () => { await refresh(); }} />}
       {route === "insights" && <InsightsView snapshot={snapshot} />}
+      {route === "settings" && <SettingsView snapshot={snapshot} onChooseVault={async () => { const next = await api.selectVault(); setSnapshot(next); setSelectedBookId(next.books[0]?.id); }} />}
+      {route === "help" && <HelpView onGoToImports={() => setRoute("imports")} onGoToSettings={() => setRoute("settings")} />}
     </div>
   );
 }

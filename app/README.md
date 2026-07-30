@@ -1,5 +1,7 @@
 # Reading Desk
 
+Current desktop release: **0.2.0**.
+
 Reading Desk is a Windows-first, local desktop companion for Kindle `My Clippings.txt` exports. It imports clippings incrementally into ordinary Markdown files in a dedicated Obsidian vault, then provides a book-first interface for reviewing highlights, preserving notes, and writing reflections.
 
 ## Use the app
@@ -34,3 +36,5 @@ npm run dist:win
 ```
 
 `npm run dev` opens the browser-based design preview with representative sample data. The real filesystem importer is available in Electron through the isolated preload bridge.
+
+`npm run qa:windows` exercises the freshly packaged executable in `release/win-unpacked` against an isolated temporary vault.

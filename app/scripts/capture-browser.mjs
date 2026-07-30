@@ -61,6 +61,11 @@ const reflection = page.getByLabel("Highlight reflection");
 await reflection.fill("A QA reflection saved from the reading workspace.");
 await reflection.blur();
 interactionChecks.push(["highlight reflection edited", await reflection.inputValue() === "A QA reflection saved from the reading workspace."]);
+await page.getByRole("button", { name: "Settings" }).click();
+interactionChecks.push(["settings view rendered", await page.getByRole("heading", { name: "Your reading desk, kept local" }).isVisible()]);
+interactionChecks.push(["release version rendered", await page.getByText("0.2.0", { exact: true }).isVisible()]);
+await page.getByRole("button", { name: "Help" }).click();
+interactionChecks.push(["help view rendered", await page.getByRole("heading", { name: "From Kindle export to reading notes" }).isVisible()]);
 
 await page.screenshot({ path: output, fullPage: false });
 for (const width of [1180, 980]) {

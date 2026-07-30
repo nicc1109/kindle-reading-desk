@@ -225,6 +225,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .insight-row span { display: flex; align-items: center; gap: 8px; font: 15px "Newsreader", Georgia, serif; }
 .insight-row strong { font-size: 12px; font-weight: 500; color: var(--muted); }
 
+.settings-grid { width: min(980px, 100%); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.settings-card { min-height: 230px; border: 1px solid var(--line-dark); border-radius: 5px; background: #fffdf9; padding: 26px; display: flex; flex-direction: column; align-items: flex-start; }
+.vault-settings-card { grid-column: 1 / -1; min-height: 220px; }
+.settings-card-heading { display: flex; align-items: flex-start; gap: 14px; color: var(--oxblood); }
+.settings-card-heading h2 { margin: 0 0 5px; color: var(--ink); font: 24px "Newsreader", Georgia, serif; }
+.settings-card-heading p { margin: 0; color: var(--muted); font: 14px/1.45 "Newsreader", Georgia, serif; }
+.vault-path-value { width: 100%; margin: 25px 0 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper-deep); padding: 13px 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #514941; font: 12px "Inter", sans-serif; }
+.settings-facts { margin: 24px 0 0; padding-left: 20px; color: var(--muted); font: 14px/1.65 "Newsreader", Georgia, serif; }
+.about-list { width: 100%; margin: 22px 0 0; }
+.about-list div { min-height: 42px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.about-list dt { color: var(--muted); font-size: 11px; }
+.about-list dd { margin: 0; font: 15px "Newsreader", Georgia, serif; }
+.help-layout { width: min(980px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: clamp(36px, 6vw, 76px); }
+.help-steps { border-top: 1px solid var(--line); }
+.help-steps article { min-height: 122px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; padding: 24px 0; }
+.help-steps article > span { width: 31px; height: 31px; border: 1px solid var(--oxblood); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--oxblood); font: 15px "Newsreader", Georgia, serif; }
+.help-steps h2, .help-aside h2 { margin: 0 0 6px; font: 22px "Newsreader", Georgia, serif; }
+.help-steps p, .help-aside p { margin: 0; color: var(--muted); font: 14px/1.55 "Newsreader", Georgia, serif; }
+.help-aside { align-self: start; border: 1px solid var(--line-dark); border-radius: 5px; background: #fffdf9; padding: 27px; }
+.help-aside p + p { margin-top: 16px; }
+.help-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 25px 0 22px; }
+.help-aside small { display: block; border-top: 1px solid var(--line); padding-top: 16px; color: var(--muted); font-size: 10px; }
+
 .onboarding, .loading-screen { width: 100vw; height: 100vh; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; color: var(--oxblood); }
 .onboarding > span { margin: 22px 0 10px; letter-spacing: .18em; font-size: 11px; font-weight: 600; }
 .onboarding h1 { max-width: 760px; margin: 0; color: var(--ink); font: 500 clamp(36px, 5vw, 62px)/1.05 "Newsreader", Georgia, serif; }
@@ -257,4 +280,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .book-reading-grid { grid-template-columns: 230px minmax(320px, 1fr); }
   .book-header h1 { font-size: 30px; }
   .tag-pills { display: none; }
+  .settings-grid, .help-layout { grid-template-columns: minmax(0, 1fr); }
+  .vault-settings-card { grid-column: auto; }
 }

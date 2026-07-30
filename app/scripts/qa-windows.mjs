@@ -8,8 +8,8 @@ const root = await mkdtemp(path.join(os.tmpdir(), "reading-desk-windows-qa-"));
 const vaultPath = path.join(root, "QA Vault");
 const userDataPath = path.join(root, "User Data");
 const exportPath = path.join(root, "My Clippings.txt");
-const output = path.resolve("windows-app-qa.png");
-const executablePath = path.join(process.env.LOCALAPPDATA || "", "Programs", "Reading Desk", "Reading Desk.exe");
+const output = path.resolve(process.env.READING_DESK_QA_OUTPUT || "windows-app-qa.png");
+const executablePath = path.resolve(process.env.READING_DESK_QA_EXECUTABLE || path.join("release", "win-unpacked", "Reading Desk.exe"));
 const checks = [];
 const runtimeErrors = [];
 
@@ -49,7 +49,7 @@ try {
     throw error;
   }
 
-  checks.push(["installed executable launched", true]);
+  checks.push(["packaged executable launched", true]);
   checks.push(["secure preload bridge available", await window.evaluate(() => typeof window.readingDesk?.getSnapshot === "function")]);
   checks.push(["book workspace loaded from Markdown vault", await window.getByText("Preferences are optional; constraints are not.", { exact: true }).first().isVisible()]);
 
@@ -57,13 +57,18 @@ try {
   checks.push(["author page lists imported book", await window.getByRole("button", { name: /Constraints/ }).isVisible()]);
   await window.getByRole("button", { name: "Reading insights" }).click();
   checks.push(["reading insights rendered", await window.getByRole("heading", { name: "A quiet view of your reading" }).isVisible()]);
+  await window.getByRole("button", { name: "Settings" }).click();
+  checks.push(["settings rendered", await window.getByRole("heading", { name: "Your reading desk, kept local" }).isVisible()]);
+  checks.push(["release version rendered", await window.getByText("0.2.0", { exact: true }).isVisible()]);
+  await window.getByRole("button", { name: "Help" }).click();
+  checks.push(["help rendered", await window.getByRole("heading", { name: "From Kindle export to reading notes" }).isVisible()]);
   await window.getByRole("button", { name: "Library" }).click();
 
   const reflection = window.getByLabel("Highlight reflection");
-  await reflection.fill("Saved through the installed Windows app.");
+  await reflection.fill("Saved through the packaged Windows app.");
   await reflection.blur();
   await window.waitForTimeout(500);
-  checks.push(["reflection saved through Electron IPC", (await readFile((await repository.scanBooks())[0].vaultPath, "utf8")).includes("Saved through the installed Windows app.")]);
+  checks.push(["reflection saved through Electron IPC", (await readFile((await repository.scanBooks())[0].vaultPath, "utf8")).includes("Saved through the packaged Windows app.")]);
   checks.push(["open in Obsidian action rendered", await window.getByRole("button", { name: /Open in Obsidian/ }).isVisible()]);
 
   await window.screenshot({ path: output });

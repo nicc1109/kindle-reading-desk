@@ -1,6 +1,6 @@
 {
   "name": "kindle-reading-desk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local-first Kindle clippings companion for Obsidian",
   "private": true,
   "type": "module",
@@ -62,11 +62,13 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
-  }
+  },
+  "author": "Reading Desk"
 }
