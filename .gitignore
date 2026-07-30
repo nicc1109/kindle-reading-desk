@@ -1,0 +1,12 @@
+# Personal Kindle export; never publish reading data.
+/My Clippings.txt
+
+# Local secrets and operating-system metadata.
+.env
+.env.*
+!.env.example
+Thumbs.db
+.DS_Store
+
+# Generated QA screenshots.
+/app/*-qa*.png
