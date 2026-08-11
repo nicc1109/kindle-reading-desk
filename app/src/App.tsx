@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowClockwise,
   ArrowSquareOut,
   ArrowsInSimple,
   ArrowsOutSimple,
@@ -25,6 +26,7 @@ import {
 } from "@phosphor-icons/react";
 import type {
   AppSnapshot,
+  AppUpdateState,
   AuthorRecord,
   BookPatch,
   BookRecord,
@@ -164,22 +166,33 @@ function HighlightList({ clippings, selectedId, onSelect, onFavorite }: {
         <strong>{clippings.length.toLocaleString()} highlights & notes</strong>
         <span>Excerpts · Book order ↑</span>
       </div>
-      <div className="highlight-list" role="listbox">
+      <div className="highlight-list" role="listbox" aria-label="Clippings in book order">
         {clippings.map((clip) => (
-          <button key={clip.id} className={`highlight-row${selectedId === clip.id ? " selected" : ""}`} onClick={() => onSelect(clip.id)} role="option" aria-selected={selectedId === clip.id}>
+          <div
+            key={clip.id}
+            className={`highlight-row${selectedId === clip.id ? " selected" : ""}`}
+            onClick={() => onSelect(clip.id)}
+            onKeyDown={(event) => {
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                onSelect(clip.id);
+              }
+            }}
+            role="option"
+            tabIndex={0}
+            aria-selected={selectedId === clip.id}
+          >
             <span className="highlight-meta"><span><ClippingTypeIcon type={clip.type} />{locationLabel(clip)}</span>
-              <span
+              <button
+                type="button"
                 className="favorite-hit"
-                role="button"
-                tabIndex={0}
                 aria-label={clip.favorite ? "Remove favorite" : "Add favorite"}
                 onClick={(event) => { event.stopPropagation(); onFavorite(clip); }}
-                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onFavorite(clip); } }}
-              ><Star size={18} weight={clip.favorite ? "fill" : "regular"} /></span>
+              ><Star size={18} weight={clip.favorite ? "fill" : "regular"} /></button>
             </span>
             <span className="highlight-excerpt">{clip.content || "Kindle bookmark"}</span>
             {clip.reflection && <small className="has-reflection"><NotePencil size={13} /> Reflection added</small>}
-          </button>
+          </div>
         ))}
       </div>
       <div className="highlight-total">{clippings.length ? `1–${clippings.length} of ${clippings.length}` : "No clippings"}</div>
@@ -206,14 +219,25 @@ function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
 }) {
   const [reflection, setReflection] = useState(clip.reflection);
   const [tags, setTags] = useState(clip.tags.join(", "));
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { setReflection(clip.reflection); setTags(clip.tags.join(", ")); }, [clip.id, clip.reflection, clip.tags]);
+  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  useEffect(() => {
+    setReflection(clip.reflection);
+    setTags(clip.tags.join(", "));
+    setSaveState("saved");
+  }, [clip.id, clip.reflection, clip.tags]);
 
   const save = async () => {
-    setSaving(true);
-    await onSave({ reflection, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) });
-    setSaving(false);
+    if (saveState === "saving" || saveState === "saved") return;
+    setSaveState("saving");
+    try {
+      await onSave({ reflection, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) });
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
   };
+  const statusText = saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Unsaved changes" : saveState === "error" ? "Could not save" : "Saved to vault";
+  const reflectionWords = reflection.trim() ? reflection.trim().split(/\s+/).length : 0;
 
   return (
     <section className="reader-pane" aria-label="Selected clipping">
@@ -224,15 +248,16 @@ function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
         <cite>— {book.title}, {book.authors.join(" & ")}</cite>
       </article>
       <div className="reflection-editor">
-        <div className="editor-heading"><h3>Your reflection</h3><span>{saving ? "Saving…" : "Saved to vault"}</span></div>
-        <div className="editor-toolbar" aria-label="Reflection tools">
-          <span>Normal <CaretDown size={13} /></span><b>B</b><i>I</i><span className="toolbar-divider" /><Tag size={17} />
+        <div className="editor-heading">
+          <div><span className="editor-eyebrow">PASSAGE NOTE</span><h3>Your reflection</h3></div>
+          <span className={`save-state save-state-${saveState}`} role="status" aria-live="polite">{statusText}</span>
         </div>
-        <textarea value={reflection} onChange={(event) => setReflection(event.target.value)} onBlur={() => void save()} placeholder="What does this passage change, challenge, or connect?" aria-label="Highlight reflection" />
+        <p className="reflection-guidance">Capture what this passage changes, challenges, or connects. Markdown is supported.</p>
+        <textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Write your response to this passage…" aria-label="Highlight reflection" />
         <div className="editor-tags">
-          <Tag size={15} /><input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Tags, separated by commas" aria-label="Highlight tags" />
+          <Tag size={15} /><input value={tags} onChange={(event) => { setTags(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Add tags, separated by commas" aria-label="Highlight tags" />
         </div>
-        <div className="editor-footer"><span><CheckCircle size={16} /> {saving ? "Saving" : "Autosaved"}</span><button className="primary-button" onClick={() => void save()}>Save reflection</button></div>
+        <div className="editor-footer"><span>{reflectionWords} {reflectionWords === 1 ? "word" : "words"}</span><button className="primary-button" disabled={saveState === "saved" || saveState === "saving"} onClick={() => void save()}>{saveState === "saving" ? "Saving…" : "Save note"}</button></div>
       </div>
       <div className="reader-pagination"><button onClick={onPrevious}>← Previous</button><button onClick={onNext}>Next →</button></div>
     </section>
@@ -243,16 +268,37 @@ type ClippingPatchLike = { reflection?: string; tags?: string[]; favorite?: bool
 
 function BookReflection({ book, onSave }: { book: BookRecord; onSave: (reflection: string) => Promise<void> }) {
   const [value, setValue] = useState(book.reflection);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => setValue(book.reflection), [book.id, book.reflection]);
-  const save = async () => { setSaving(true); await onSave(value); setSaving(false); };
+  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  useEffect(() => { setValue(book.reflection); setSaveState("saved"); }, [book.id, book.reflection]);
+  const save = async () => {
+    if (saveState === "saving" || saveState === "saved") return;
+    setSaveState("saving");
+    try {
+      await onSave(value);
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  };
+  const addPrompt = (heading: string) => {
+    setValue((current) => `${current.trimEnd()}${current.trim() ? "\n\n" : ""}## ${heading}\n\n`);
+    setSaveState("dirty");
+  };
+  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const statusText = saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Unsaved changes" : saveState === "error" ? "Could not save" : "Saved to vault";
   return (
-    <section className="book-reflection-view">
-      <div className="longform-heading"><span>BOOK REFLECTION</span><h2>What stayed with you?</h2><p>Use this space for the argument of the book, your response, and the ideas worth carrying forward.</p></div>
+    <section className="book-reflection-view" id="book-panel-reflection" role="tabpanel" aria-labelledby="book-tab-reflection">
+      <div className="longform-heading"><span>BOOK NOTES</span><h2>Make the book useful.</h2><p>Capture the argument in your own words, what you question, and the ideas you want to carry forward.</p></div>
+      <div className="reflection-prompts" aria-label="Reflection prompts">
+        <span>Start with</span>
+        <button type="button" onClick={() => addPrompt("Core argument")}>Core argument</button>
+        <button type="button" onClick={() => addPrompt("What I question")}>What I question</button>
+        <button type="button" onClick={() => addPrompt("Connections")}>Connections</button>
+      </div>
       <div className="longform-editor">
-        <div className="editor-toolbar"><span>Normal <CaretDown size={13} /></span><b>B</b><i>I</i><span className="toolbar-divider" /><Tag size={17} /></div>
-        <textarea value={value} onChange={(event) => setValue(event.target.value)} onBlur={() => void save()} placeholder="Write your book-level reflection…" />
-        <div className="editor-footer"><span><CheckCircle size={16} /> {saving ? "Saving" : "Saved to vault"}</span><button className="primary-button" onClick={() => void save()}>Save reflection</button></div>
+        <div className="longform-editor-heading"><label htmlFor="book-reflection">Book reflection</label><span className={`save-state save-state-${saveState}`} role="status" aria-live="polite">{statusText}</span></div>
+        <textarea id="book-reflection" value={value} onChange={(event) => { setValue(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Write the ideas you want to remember…" />
+        <div className="editor-footer"><span>{wordCount} {wordCount === 1 ? "word" : "words"} · Markdown supported</span><button className="primary-button" disabled={saveState === "saved" || saveState === "saving"} onClick={() => void save()}>{saveState === "saving" ? "Saving…" : "Save reflection"}</button></div>
       </div>
     </section>
   );
@@ -276,7 +322,7 @@ function BookDetails({ book, books, onSave, onMerge }: {
     setStartedAt(book.startedAt?.slice(0, 10) || ""); setFinishedAt(book.finishedAt?.slice(0, 10) || "");
   }, [book.id, book.title, book.authors, book.tags, book.status, book.startedAt, book.finishedAt]);
   return (
-    <section className="details-view">
+    <section className="details-view" id="book-panel-details" role="tabpanel" aria-labelledby="book-tab-details">
       <div className="details-grid">
         <label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         <label>Authors <small>Separate multiple authors with semicolons</small><input value={authors} onChange={(event) => setAuthors(event.target.value)} /></label>
@@ -341,12 +387,12 @@ function BookWorkspace({ book, books, authors, onAuthor, onRefresh, onOpenBook, 
         <div className="tag-pills">{localBook.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
       </div>
       <div className="book-tabs" role="tablist">
-        <button className={tab === "highlights" ? "active" : ""} onClick={() => setTab("highlights")}>Highlights</button>
-        <button className={tab === "reflection" ? "active" : ""} onClick={() => setTab("reflection")}>Book reflection</button>
-        <button className={tab === "details" ? "active" : ""} onClick={() => setTab("details")}>Details</button>
+        <button id="book-tab-highlights" role="tab" aria-selected={tab === "highlights"} aria-controls="book-panel-highlights" tabIndex={tab === "highlights" ? 0 : -1} className={tab === "highlights" ? "active" : ""} onClick={() => setTab("highlights")}>Highlights</button>
+        <button id="book-tab-reflection" role="tab" aria-selected={tab === "reflection"} aria-controls="book-panel-reflection" tabIndex={tab === "reflection" ? 0 : -1} className={tab === "reflection" ? "active" : ""} onClick={() => setTab("reflection")}>Book reflection</button>
+        <button id="book-tab-details" role="tab" aria-selected={tab === "details"} aria-controls="book-panel-details" tabIndex={tab === "details" ? 0 : -1} className={tab === "details" ? "active" : ""} onClick={() => setTab("details")}>Details</button>
       </div>
       {tab === "highlights" && selectedClip && (
-        <div className="book-reading-grid">
+        <div className="book-reading-grid" id="book-panel-highlights" role="tabpanel" aria-labelledby="book-tab-highlights">
           <HighlightList clippings={localBook.clippings} selectedId={selectedClip.id} onSelect={setSelectedClipId} onFavorite={(clip) => void updateClip(clip.id, { favorite: !clip.favorite })} />
           <ReaderPane book={localBook} clip={selectedClip} onSave={(patch) => updateClip(selectedClip.id, patch)} onNext={() => setSelectedClipId(localBook.clippings[Math.min(localBook.clippings.length - 1, selectedIndex + 1)]?.id)} onPrevious={() => setSelectedClipId(localBook.clippings[Math.max(0, selectedIndex - 1)]?.id)} />
         </div>
@@ -432,7 +478,38 @@ function InsightsView({ snapshot }: { snapshot: AppSnapshot }) {
   );
 }
 
-function SettingsView({ snapshot, onChooseVault }: { snapshot: AppSnapshot; onChooseVault: () => Promise<void> }) {
+function SettingsView({ snapshot, updateState, onChooseVault, onCheckForUpdates, onDownloadUpdate, onInstallUpdate }: {
+  snapshot: AppSnapshot;
+  updateState: AppUpdateState;
+  onChooseVault: () => Promise<void>;
+  onCheckForUpdates: () => Promise<void>;
+  onDownloadUpdate: () => Promise<void>;
+  onInstallUpdate: () => Promise<void>;
+}) {
+  const checking = updateState.stage === "checking";
+  const downloading = updateState.stage === "downloading";
+  const updateAvailable = updateState.stage === "available";
+  const updateDownloaded = updateState.stage === "downloaded";
+  const updateAction = updateDownloaded ? onInstallUpdate : updateAvailable ? onDownloadUpdate : onCheckForUpdates;
+  const actionLabel = updateDownloaded
+    ? "Restart and install"
+    : updateAvailable
+      ? "Download update"
+      : checking
+        ? "Checking…"
+        : downloading
+          ? `Downloading ${updateState.progress || 0}%`
+          : "Check for updates";
+  const stageLabel: Record<AppUpdateState["stage"], string> = {
+    idle: "Ready to check",
+    checking: "Checking for updates",
+    "up-to-date": "Up to date",
+    available: `Version ${updateState.availableVersion || "new"} available`,
+    downloading: `Downloading ${updateState.progress || 0}%`,
+    downloaded: "Ready to install",
+    error: "Update problem",
+    unsupported: "Installed app only",
+  };
   return (
     <main className="section-view settings-view">
       <header className="section-header"><span>SETTINGS</span><h1>Your reading desk, kept local</h1><p>Choose where Reading Desk stores its Markdown library and review what the app can access.</p></header>
@@ -449,6 +526,17 @@ function SettingsView({ snapshot, onChooseVault }: { snapshot: AppSnapshot; onCh
         <section className="settings-card">
           <div className="settings-card-heading"><BookOpen size={26} weight="light" /><div><h2>About Reading Desk</h2><p>A local companion for Kindle clippings and Obsidian.</p></div></div>
           <dl className="about-list"><div><dt>Version</dt><dd>{appVersion}</dd></div><div><dt>Storage</dt><dd>Local Markdown</dd></div><div><dt>Platform</dt><dd>Windows desktop</dd></div></dl>
+        </section>
+        <section className="settings-card update-settings-card" aria-live="polite">
+          <div className="settings-card-heading"><ArrowClockwise size={26} weight="light" /><div><h2>App updates</h2><p>Reading Desk checks public GitHub Releases and lets you choose when to install.</p></div></div>
+          <div className={`update-status update-status-${updateState.stage}`}>
+            <div><strong>{stageLabel[updateState.stage]}</strong><span>Current version {updateState.currentVersion}</span></div>
+            {downloading && <div className="update-progress" role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={updateState.progress || 0}><span style={{ width: `${updateState.progress || 0}%` }} /></div>}
+            {updateState.message && <p>{updateState.message}</p>}
+          </div>
+          <button className={updateDownloaded || updateAvailable ? "primary-button" : "secondary-button"} onClick={() => void updateAction()} disabled={checking || downloading || updateState.stage === "unsupported"}>
+            {updateAvailable ? <DownloadSimple size={18} /> : <ArrowClockwise size={18} />}{actionLabel}
+          </button>
         </section>
       </div>
     </main>
@@ -501,6 +589,11 @@ export function App() {
   const [mainMenuVisible, setMainMenuVisible] = useState(true);
   const [booksVisible, setBooksVisible] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
+  const [updateState, setUpdateState] = useState<AppUpdateState>({
+    stage: window.readingDesk ? "idle" : "unsupported",
+    currentVersion: appVersion,
+    message: window.readingDesk ? undefined : "Update checks are available in the installed Windows app.",
+  });
 
   const refresh = useCallback(async () => {
     const next = await api.getSnapshot();
@@ -510,6 +603,10 @@ export function App() {
   }, []);
 
   useEffect(() => { void refresh().finally(() => setLoading(false)); return api.onVaultChanged(() => void refresh()); }, [refresh]);
+  useEffect(() => {
+    void api.getUpdateState().then(setUpdateState);
+    return api.onUpdateState(setUpdateState);
+  }, []);
   useEffect(() => {
     if (!selectedBookId) { setBook(null); return; }
     void api.getBook(selectedBookId).then(setBook);
@@ -527,13 +624,26 @@ export function App() {
 
   return (
     <div className={`app-shell${!mainMenuVisible || focusMode ? " main-menu-hidden" : ""}`}>
+      {(updateState.stage === "available" || updateState.stage === "downloaded") && (
+        <div className="update-notice" role="status">
+          <div><strong>{updateState.stage === "downloaded" ? "Update ready" : `Reading Desk ${updateState.availableVersion || "update"} available`}</strong><span>{updateState.stage === "downloaded" ? "Restart when you are ready to install it." : "Download it from Settings when convenient."}</span></div>
+          <button onClick={() => { setFocusMode(false); setRoute("settings"); }}>View update</button>
+        </div>
+      )}
       {!focusMode && mainMenuVisible && <Sidebar route={route} setRoute={setRoute} vaultPath={snapshot.vaultPath} onHide={() => setMainMenuVisible(false)} />}
       {!focusMode && !mainMenuVisible && route !== "library" && <button className="floating-panel-toggle" onClick={() => setMainMenuVisible(true)} aria-label="Show main menu" title="Show main menu"><SidebarSimple size={21} /></button>}
       {route === "library" && <div className={`library-route${!booksVisible || focusMode ? " books-hidden" : ""}`}>{!focusMode && booksVisible && <LibraryPanel books={snapshot.books} selectedId={selectedBookId} onSelect={setSelectedBookId} onHide={() => setBooksVisible(false)} />}{book ? <BookWorkspace book={book} books={snapshot.books} authors={snapshot.authors} onAuthor={openAuthor} onRefresh={async () => { const next = await refresh(); if (selectedBookId) setBook(await api.getBook(selectedBookId)); void next; }} onOpenBook={openBook} mainMenuVisible={mainMenuVisible} booksVisible={booksVisible} focusMode={focusMode} onToggleMainMenu={() => setMainMenuVisible((value) => !value)} onToggleBooks={() => setBooksVisible((value) => !value)} onToggleFocus={() => setFocusMode((value) => !value)} /> : <div className="empty-workspace"><Books size={42} /><h2>Your library is ready</h2><p>Import My Clippings.txt to create your first book note.</p><button className="primary-button" onClick={() => setRoute("imports")}>Import clippings</button></div>}</div>}
       {route === "authors" && <AuthorsView authors={snapshot.authors} initialName={selectedAuthorName} onOpenBook={openBook} onMerged={async () => { await refresh(); }} />}
       {route === "imports" && <ImportsView snapshot={snapshot} onCommitted={async () => { await refresh(); }} />}
       {route === "insights" && <InsightsView snapshot={snapshot} />}
-      {route === "settings" && <SettingsView snapshot={snapshot} onChooseVault={async () => { const next = await api.selectVault(); setSnapshot(next); setSelectedBookId(next.books[0]?.id); }} />}
+      {route === "settings" && <SettingsView
+        snapshot={snapshot}
+        updateState={updateState}
+        onChooseVault={async () => { const next = await api.selectVault(); setSnapshot(next); setSelectedBookId(next.books[0]?.id); }}
+        onCheckForUpdates={async () => { setUpdateState(await api.checkForUpdates()); }}
+        onDownloadUpdate={async () => { setUpdateState(await api.downloadUpdate()); }}
+        onInstallUpdate={async () => { await api.installUpdate(); }}
+      />}
       {route === "help" && <HelpView onGoToImports={() => setRoute("imports")} onGoToSettings={() => setRoute("settings")} />}
     </div>
   );

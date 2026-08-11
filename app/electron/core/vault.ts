@@ -140,22 +140,27 @@ function decodeClippingMeta(value: string): EncodedClippingMeta {
 export function renderClippingBlock(clip: ClippingRecord): string {
   const label = clip.type.charAt(0).toUpperCase() + clip.type.slice(1);
   const tagLine = clip.tags.length ? `**Tags:** ${clip.tags.map((tag) => `#${tag.replace(/\s+/g, "-")}`).join(" ")}\n\n` : "";
+  const reflectionLines = clip.reflection
+    ? [
+        "#### My note",
+        `<!-- reading-desk:reflection:start id="${clip.id}" -->`,
+        clip.reflection,
+        `<!-- reading-desk:reflection:end id="${clip.id}" -->`,
+      ]
+    : [`<!-- reading-desk:reflection:start id="${clip.id}" --><!-- reading-desk:reflection:end id="${clip.id}" -->`];
   return [
     `<!-- reading-desk:clipping:start id="${clip.id}" data="${encodeClippingMeta(clip)}" -->`,
-    `### ${label} · ${clippingLocation(clip)}${clip.favorite ? " · ★" : ""}`,
+    `### ${label} — ${clippingLocation(clip)}${clip.favorite ? " · ★" : ""}`,
     "",
     "<!-- reading-desk:quote:start -->",
     quoteMarkdown(clip.content),
     "<!-- reading-desk:quote:end -->",
     "",
-    clip.addedAtRaw ? `*Added ${clip.addedAtRaw}*` : "*Original Kindle date unavailable*",
+    clip.addedAtRaw ? `*Kindle ${clip.type} · Added ${clip.addedAtRaw}*` : `*Kindle ${clip.type} · Original date unavailable*`,
     "",
     tagLine.trimEnd(),
     tagLine ? "" : "",
-    "**My reflection**",
-    `<!-- reading-desk:reflection:start id="${clip.id}" -->`,
-    clip.reflection || "",
-    `<!-- reading-desk:reflection:end id="${clip.id}" -->`,
+    ...reflectionLines,
     "",
     `^kindle-${clip.id.replace(/^clip-/, "")}`,
     `<!-- reading-desk:clipping:end id="${clip.id}" -->`,
@@ -177,7 +182,7 @@ function ownedFrontmatter(book: BookRecord): Record<string, unknown> {
     first_clipping: book.firstClippingAt || null,
     last_clipping: book.lastClippingAt || null,
     clipping_count: book.clippings.length,
-    reading_desk_version: 1,
+    reading_desk_version: 2,
   };
 }
 
@@ -189,7 +194,7 @@ function bookIdentityMarkdown(book: BookRecord): string {
   return [
     `# ${book.title}`,
     "",
-    `**Author${book.authors.length === 1 ? "" : "s"}:** ${book.authors.map((author) => `[[Authors/${slugify(author)}|${author}]]`).join(", ")}`,
+    `*by ${book.authors.map((author) => `[[Authors/${slugify(author)}|${author}]]`).join(" & ")}*`,
   ].join("\n");
 }
 
@@ -204,7 +209,7 @@ export function renderBookMarkdown(book: BookRecord): string {
     bookIdentityMarkdown(book),
     BOOK_IDENTITY_END,
     "",
-    "## Book reflection",
+    "## Reflection",
     BOOK_REFLECTION_START,
     book.reflection || "",
     BOOK_REFLECTION_END,

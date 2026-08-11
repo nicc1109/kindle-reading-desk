@@ -1,5 +1,6 @@
 import type {
   AppSnapshot,
+  AppUpdateState,
   AuthorRecord,
   BookPatch,
   BookRecord,
@@ -132,6 +133,11 @@ function buildAuthors(): AuthorRecord[] {
 
 let vaultPath = "C:\\Users\\Reader\\Documents\\Reading Desk Vault";
 let preview: ImportPreview | null = null;
+const demoUpdateState: AppUpdateState = {
+  stage: "unsupported",
+  currentVersion: "0.2.1",
+  message: "Update checks are available in the installed Windows app.",
+};
 
 function snapshot(): AppSnapshot {
   return {
@@ -211,5 +217,10 @@ export const demoApi: ReadingDeskApi = {
   },
   openBookInObsidian: async () => true,
   showBookInFolder: async () => true,
+  getUpdateState: async () => demoUpdateState,
+  checkForUpdates: async () => demoUpdateState,
+  downloadUpdate: async () => demoUpdateState,
+  installUpdate: async () => false,
+  onUpdateState: () => () => undefined,
   onVaultChanged: () => () => undefined,
 };

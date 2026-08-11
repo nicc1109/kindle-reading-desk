@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - 2026-08-11
+
+- Redesigned passage and book reflections with working prompts, honest save states, and responsive layouts.
+- Improved generated Obsidian Markdown and removed repeated empty reflection headings.
+- Added automatic Windows update checks backed by public GitHub Releases.
+- Added in-app download progress and restart-to-install controls under Settings.
+- Added a tagged GitHub Actions workflow that packages Windows releases automatically.
+
 ## 0.2.0 - 2026-07-30
 
 - Added working Settings and Help destinations to replace inactive navigation controls.

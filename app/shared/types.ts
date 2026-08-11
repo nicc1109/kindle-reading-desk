@@ -121,6 +121,24 @@ export interface AppSnapshot {
   imports: ImportHistoryEntry[];
 }
 
+export type AppUpdateStage =
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error"
+  | "unsupported";
+
+export interface AppUpdateState {
+  stage: AppUpdateStage;
+  currentVersion: string;
+  availableVersion?: string;
+  progress?: number;
+  message?: string;
+}
+
 export interface BookPatch {
   title?: string;
   authors?: string[];
@@ -152,5 +170,10 @@ export interface ReadingDeskApi {
   mergeAuthors(sourceName: string, targetName: string): Promise<AppSnapshot>;
   openBookInObsidian(bookId: string): Promise<boolean>;
   showBookInFolder(bookId: string): Promise<boolean>;
+  getUpdateState(): Promise<AppUpdateState>;
+  checkForUpdates(): Promise<AppUpdateState>;
+  downloadUpdate(): Promise<AppUpdateState>;
+  installUpdate(): Promise<boolean>;
+  onUpdateState(callback: (state: AppUpdateState) => void): () => void;
   onVaultChanged(callback: () => void): () => void;
 }

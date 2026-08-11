@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { autoUpdater } from "electron-updater";
 import chokidar, { type FSWatcher } from "chokidar";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BookPatch, ClippingPatch } from "../shared/types.js";
+import type { AppUpdateState, BookPatch, ClippingPatch } from "../shared/types.js";
 import { VaultRepository } from "./core/vault.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,10 @@ let mainWindow: BrowserWindow | null = null;
 let repository: VaultRepository | null = null;
 let watcher: FSWatcher | null = null;
 let watcherTimer: NodeJS.Timeout | null = null;
+let updateState: AppUpdateState = {
+  stage: "idle",
+  currentVersion: app.getVersion(),
+};
 
 interface Settings {
   vaultPath?: string;
@@ -56,8 +61,103 @@ function requireRepository(): VaultRepository {
   return repository;
 }
 
+function updaterIsSupported(): boolean {
+  return app.isPackaged && process.platform === "win32";
+}
+
+function publishUpdateState(patch: Partial<AppUpdateState>): AppUpdateState {
+  updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
+  mainWindow?.webContents.send("app:update:state", updateState);
+  return updateState;
+}
+
+function configureUpdater(): void {
+  if (!updaterIsSupported()) {
+    publishUpdateState({
+      stage: "unsupported",
+      message: "Update checks are available in the installed Windows app.",
+    });
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("checking-for-update", () => publishUpdateState({ stage: "checking", message: undefined }));
+  autoUpdater.on("update-available", (info) => publishUpdateState({
+    stage: "available",
+    availableVersion: info.version,
+    progress: undefined,
+    message: `Reading Desk ${info.version} is ready to download.`,
+  }));
+  autoUpdater.on("update-not-available", () => publishUpdateState({
+    stage: "up-to-date",
+    availableVersion: undefined,
+    progress: undefined,
+    message: "You are using the latest version.",
+  }));
+  autoUpdater.on("download-progress", (progress) => publishUpdateState({
+    stage: "downloading",
+    progress: Math.max(0, Math.min(100, Math.round(progress.percent))),
+    message: "Downloading the update…",
+  }));
+  autoUpdater.on("update-downloaded", (info) => publishUpdateState({
+    stage: "downloaded",
+    availableVersion: info.version,
+    progress: 100,
+    message: "The update is ready. Restart Reading Desk to install it.",
+  }));
+  autoUpdater.on("error", (error) => publishUpdateState({
+    stage: "error",
+    progress: undefined,
+    message: `Update check failed: ${error.message}`,
+  }));
+}
+
+async function checkForUpdates(): Promise<AppUpdateState> {
+  if (!updaterIsSupported()) return publishUpdateState({
+    stage: "unsupported",
+    message: "Update checks are available in the installed Windows app.",
+  });
+  if (["checking", "downloading", "downloaded"].includes(updateState.stage)) return updateState;
+  publishUpdateState({ stage: "checking", message: undefined });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    publishUpdateState({
+      stage: "error",
+      message: `Update check failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    });
+  }
+  return updateState;
+}
+
+async function downloadUpdate(): Promise<AppUpdateState> {
+  if (!updaterIsSupported() || updateState.stage !== "available") return updateState;
+  publishUpdateState({ stage: "downloading", progress: 0, message: "Starting download…" });
+  try {
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    publishUpdateState({
+      stage: "error",
+      progress: undefined,
+      message: `Update download failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    });
+  }
+  return updateState;
+}
+
 function registerIpc(): void {
   ipcMain.handle("app:snapshot", snapshot);
+  ipcMain.handle("app:update:get-state", () => updateState);
+  ipcMain.handle("app:update:check", checkForUpdates);
+  ipcMain.handle("app:update:download", downloadUpdate);
+  ipcMain.handle("app:update:install", () => {
+    if (!updaterIsSupported() || updateState.stage !== "downloaded") return false;
+    setTimeout(() => autoUpdater.quitAndInstall(false, true), 100);
+    return true;
+  });
   ipcMain.handle("app:get-book", (_event, bookId: string) => requireRepository().getBook(bookId));
   ipcMain.handle("vault:select", async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -143,10 +243,13 @@ async function createWindow(): Promise<void> {
 
 app.whenReady().then(async () => {
   app.setName("Reading Desk");
+  updateState = { stage: "idle", currentVersion: app.getVersion() };
+  configureUpdater();
   registerIpc();
   const settings = await readSettings();
   if (settings.vaultPath) await setVault(settings.vaultPath);
   await createWindow();
+  if (updaterIsSupported()) setTimeout(() => { void checkForUpdates(); }, 5000);
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow(); });
 });
 

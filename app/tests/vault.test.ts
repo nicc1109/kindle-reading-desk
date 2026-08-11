@@ -45,7 +45,11 @@ describe("Markdown vault repository", () => {
     const book = (await repository.scanBooks())[0];
     expect(book.clippings).toHaveLength(2);
     const originalMarkdown = await readFile(book.vaultPath!, "utf8");
-    await writeFile(book.vaultPath!, `${originalMarkdown.replace("reading_desk_version: 1", "reading_desk_version: 1\nmy_custom_frontmatter: keep-me")}\n## My independent section\nDo not change this.\n`, "utf8");
+    expect(originalMarkdown).toContain("# Constraints\n\n*by [[Authors/Jane Doe|Jane Doe]]*");
+    expect(originalMarkdown).toContain("### Highlight — Page 10 · Location 100–101");
+    expect(originalMarkdown).not.toContain("**My reflection**");
+    expect(originalMarkdown).not.toContain("#### My note");
+    await writeFile(book.vaultPath!, `${originalMarkdown.replace("reading_desk_version: 2", "reading_desk_version: 2\nmy_custom_frontmatter: keep-me")}\n## My independent section\nDo not change this.\n`, "utf8");
     await repository.updateBook(book.id, { reflection: "The whole-book reflection." });
     await repository.updateClipping(book.id, book.clippings[0].id, { reflection: "A clipping reflection.", favorite: true });
 
@@ -57,6 +61,7 @@ describe("Markdown vault repository", () => {
     expect(afterDuplicate).toContain("my_custom_frontmatter: keep-me");
     expect(afterDuplicate).toContain("The whole-book reflection.");
     expect(afterDuplicate).toContain("A clipping reflection.");
+    expect(afterDuplicate).toContain("#### My note");
 
     const preservedBlock = afterDuplicate.match(/<!-- reading-desk:clipping:start id="[^"]+"[\s\S]*?<!-- reading-desk:clipping:end id="[^"]+" -->/)?.[0];
     const added = `${firstExport}\nConstraints (Jane Doe)\n- Your Highlight on page 5 | Location 50-51 | Added on Saturday, October 14, 2023 04:15:54 PM\n\nA genuinely new clipping.\n==========\n`;

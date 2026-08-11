@@ -15,6 +15,15 @@ const api = {
   mergeAuthors: (sourceName, targetName) => ipcRenderer.invoke("author:merge", sourceName, targetName),
   openBookInObsidian: (bookId) => ipcRenderer.invoke("book:open-obsidian", bookId),
   showBookInFolder: (bookId) => ipcRenderer.invoke("book:show-folder", bookId),
+  getUpdateState: () => ipcRenderer.invoke("app:update:get-state"),
+  checkForUpdates: () => ipcRenderer.invoke("app:update:check"),
+  downloadUpdate: () => ipcRenderer.invoke("app:update:download"),
+  installUpdate: () => ipcRenderer.invoke("app:update:install"),
+  onUpdateState: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on("app:update:state", listener);
+    return () => ipcRenderer.removeListener("app:update:state", listener);
+  },
   onVaultChanged: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("vault:changed", listener);
