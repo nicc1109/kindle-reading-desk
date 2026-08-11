@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compareClippings, parseClippingsFile, parseKindleDate } from "../electron/core/parser";
 
@@ -27,8 +26,8 @@ describe("Kindle clipping parser", () => {
     expect(result.clippings[1].addedAt).toBe("2023-10-13T16:15:54.000Z");
   });
 
-  it("parses the supplied Kindle export completely", async () => {
-    const sample = await readFile(path.resolve(process.cwd(), "../My Clippings.txt"), "utf8");
+  it("parses the committed representative Kindle export completely", async () => {
+    const sample = await readFile(new URL("./fixtures/my-clippings.sample.txt", import.meta.url), "utf8");
     const result = parseClippingsFile(sample);
     const sourceBlocks = sample
       .replace(/^\uFEFF/, "")
@@ -40,13 +39,13 @@ describe("Kindle clipping parser", () => {
       counts[clip.type] = (counts[clip.type] || 0) + 1;
       return counts;
     }, {});
-    expect(result.clippings).toHaveLength(8942);
-    expect(result.books).toHaveLength(128);
-    expect(types).toEqual({ highlight: 8353, note: 535, bookmark: 54 });
-    expect(result.clippings.filter((clip) => !clip.content)).toHaveLength(55);
+    expect(result.clippings).toHaveLength(4);
+    expect(result.books).toHaveLength(2);
+    expect(types).toEqual({ highlight: 2, note: 1, bookmark: 1 });
+    expect(result.clippings.filter((clip) => !clip.content)).toHaveLength(2);
     expect(result.warnings.filter((warning) => warning.message.startsWith("Unrecognized clipping type"))).toHaveLength(0);
     expect(result.warnings).toContainEqual(expect.objectContaining({
-      block: 6672,
+      block: 4,
       message: "Highlight has no text in the source file",
     }));
 

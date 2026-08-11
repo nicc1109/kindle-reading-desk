@@ -1,0 +1,19 @@
+The First Book (Doe, Jane)
+- Your Highlight on page 10-11 | Location 100-102 | Added on Friday, October 13, 2023 04:15:54 PM
+
+The first line of a representative highlight.
+The second line must remain intact.
+==========
+The First Book (Doe, Jane)
+- Your Note on page 12 | Location 110 | Added on Saturday, October 14, 2023 09:30:00 AM
+
+A short note about the passage.
+==========
+Another Book - John Smith
+- Your Bookmark on page 4 | Location 40 | Added on Sunday, October 15, 2023 10:00:00 AM
+
+==========
+Another Book - John Smith
+- Your Highlight on page 5 | Location 41 | Added on Sunday, October 15, 2023 10:01:00 AM
+
+==========

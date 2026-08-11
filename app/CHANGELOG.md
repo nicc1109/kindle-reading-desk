@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 - 2026-08-11
+
+- Made the parser test suite portable by replacing its dependency on a private Kindle export with a committed synthetic fixture.
+- Fixed clean GitHub Actions release builds while keeping personal `My Clippings.txt` data excluded from the repository.
+
 ## 0.2.1 - 2026-08-11
 
 - Redesigned passage and book reflections with working prompts, honest save states, and responsive layouts.
