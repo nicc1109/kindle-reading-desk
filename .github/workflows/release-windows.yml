@@ -42,7 +42,7 @@ jobs:
         run: npm test
 
       - name: Build Windows installer
-        run: npm run dist:win
+        run: npm run dist:win -- --publish never
 
       - name: Match installer filenames to the update manifest
         shell: pwsh

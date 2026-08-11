@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3 - 2026-08-11
+
+- Disabled `electron-builder`'s implicit tag publishing so the authorized GitHub Release step can upload Windows artifacts reliably.
+
 ## 0.2.2 - 2026-08-11
 
 - Made the parser test suite portable by replacing its dependency on a private Kindle export with a committed synthetic fixture.
