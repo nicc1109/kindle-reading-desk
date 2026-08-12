@@ -65,11 +65,12 @@ try {
   checks.push(["help rendered", await window.getByRole("heading", { name: "From Kindle export to reading notes" }).isVisible()]);
   await window.getByRole("button", { name: "Library" }).click();
 
-  const reflection = window.getByLabel("Highlight reflection");
-  await reflection.fill("Saved through the packaged Windows app.");
-  await reflection.blur();
+  await window.getByRole("button", { name: "Notes" }).click();
+  const notes = window.getByRole("textbox", { name: "Notes" });
+  await notes.fill("Saved through the packaged Windows app.");
+  await notes.blur();
   await window.waitForTimeout(500);
-  checks.push(["reflection saved through Electron IPC", (await readFile((await repository.scanBooks())[0].vaultPath, "utf8")).includes("Saved through the packaged Windows app.")]);
+  checks.push(["note saved through Electron IPC", (await readFile((await repository.scanBooks())[0].vaultPath, "utf8")).includes("Saved through the packaged Windows app.")]);
   checks.push(["open in Obsidian action rendered", await window.getByRole("button", { name: /Open in Obsidian/ }).isVisible()]);
 
   await window.screenshot({ path: output });

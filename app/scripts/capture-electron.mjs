@@ -60,10 +60,13 @@ interactionChecks.push(["library navigation click", await clickText("Library")])
 await wait(300);
 interactionChecks.push(["book reflection tab click", await clickText("Book reflection")]);
 await wait(200);
-interactionChecks.push(["book reflection rendered", await hasText("What stayed with you?")]);
+interactionChecks.push(["book reflection rendered", await hasText("Make the book useful.")]);
 interactionChecks.push(["highlights tab click", await clickText("Highlights")]);
 await wait(250);
-interactionChecks.push(["highlight reflection rendered", await hasText("Your reflection")]);
+interactionChecks.push(["notes control rendered", await hasText("Notes")]);
+interactionChecks.push(["notes control click", await clickText("Notes")]);
+await wait(150);
+interactionChecks.push(["notes editor rendered", await hasText("Save note")]);
 
 const image = await window.webContents.capturePage();
 await writeFile(output, image.toPNG());

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7 - 2026-08-12
+
+- Updated packaged Windows verification for the new on-demand Notes editor.
+
 ## 0.2.6 - 2026-08-12
 
 - Added persistent mouse- and keyboard-resizable navigation and book-list panes.
