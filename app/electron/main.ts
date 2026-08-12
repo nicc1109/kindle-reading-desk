@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
 import chokidar, { type FSWatcher } from "chokidar";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppUpdateState, BookPatch, ClippingPatch } from "../shared/types.js";
 import { VaultRepository } from "./core/vault.js";
+
+const { autoUpdater } = electronUpdater;
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;

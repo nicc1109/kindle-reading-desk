@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 - 2026-08-11
+
+- Fixed the packaged Windows app crash caused by importing the CommonJS `electron-updater` package as an ESM named export.
+- Added a packaged-runtime verification step to the release check for the updater startup path.
+
 ## 0.2.3 - 2026-08-11
 
 - Disabled `electron-builder`'s implicit tag publishing so the authorized GitHub Release step can upload Windows artifacts reliably.

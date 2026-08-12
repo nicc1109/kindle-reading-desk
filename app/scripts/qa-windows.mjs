@@ -12,6 +12,7 @@ const output = path.resolve(process.env.READING_DESK_QA_OUTPUT || "windows-app-q
 const executablePath = path.resolve(process.env.READING_DESK_QA_EXECUTABLE || path.join("release", "win-unpacked", "Reading Desk.exe"));
 const checks = [];
 const runtimeErrors = [];
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 const sample = [
   "Constraints (Jane Doe)",
@@ -59,7 +60,7 @@ try {
   checks.push(["reading insights rendered", await window.getByRole("heading", { name: "A quiet view of your reading" }).isVisible()]);
   await window.getByRole("button", { name: "Settings" }).click();
   checks.push(["settings rendered", await window.getByRole("heading", { name: "Your reading desk, kept local" }).isVisible()]);
-  checks.push(["release version rendered", await window.getByText("0.2.0", { exact: true }).isVisible()]);
+  checks.push(["release version rendered", await window.getByText(packageJson.version, { exact: true }).isVisible()]);
   await window.getByRole("button", { name: "Help" }).click();
   checks.push(["help rendered", await window.getByRole("heading", { name: "From Kindle export to reading notes" }).isVisible()]);
   await window.getByRole("button", { name: "Library" }).click();
