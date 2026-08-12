@@ -1,6 +1,6 @@
 # Reading Desk
 
-Current desktop release: **0.2.4**.
+Current desktop release: **0.2.5**.
 
 [Download the latest Windows installer](https://github.com/nicc1109/kindle-reading-desk/releases/latest)
 

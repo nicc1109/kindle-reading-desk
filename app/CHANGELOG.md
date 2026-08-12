@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5 - 2026-08-11
+
+- Added persistent accessible names to compact sidebar navigation buttons.
+- Made the packaged Windows release gate reliable on smaller hosted-runner displays.
+
 ## 0.2.4 - 2026-08-11
 
 - Fixed the packaged Windows app crash caused by importing the CommonJS `electron-updater` package as an ESM named export.
