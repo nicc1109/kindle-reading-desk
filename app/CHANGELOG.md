@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 - 2026-08-12
+
+- Added persistent mouse- and keyboard-resizable navigation and book-list panes.
+- Simplified clipping reflections into an on-demand Notes editor.
+- Removed the redundant full-page book control and refined citation typography.
+
 ## 0.2.5 - 2026-08-11
 
 - Added persistent accessible names to compact sidebar navigation buttons.

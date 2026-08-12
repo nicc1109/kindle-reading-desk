@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowSquareOut,
-  ArrowsInSimple,
-  ArrowsOutSimple,
   BookOpen,
   Books,
   BookmarkSimple,
@@ -44,6 +42,81 @@ type BookTab = "highlights" | "reflection" | "details";
 
 const api: ReadingDeskApi = window.readingDesk || demoApi;
 const appVersion = packageMetadata.version;
+const PRIMARY_NAVIGATION_DEFAULT = 184;
+const PRIMARY_NAVIGATION_MIN = 160;
+const PRIMARY_NAVIGATION_MAX = 320;
+const PRIMARY_NAVIGATION_COMPACT = 74;
+const PRIMARY_NAVIGATION_COMPACT_BREAKPOINT = 1320;
+const BOOK_LIST_DEFAULT = 410;
+const BOOK_LIST_MIN = 280;
+const BOOK_LIST_MAX = 600;
+const BOOK_WORKSPACE_MIN = 550;
+const PRIMARY_NAVIGATION_STORAGE_KEY = "reading-desk.primary-navigation-width";
+const BOOK_LIST_STORAGE_KEY = "reading-desk.book-list-width";
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function readStoredWidth(key: string, fallback: number, minimum: number, maximum: number): number {
+  try {
+    const value = Number.parseInt(window.localStorage.getItem(key) || "", 10);
+    return Number.isFinite(value) ? clamp(value, minimum, maximum) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function PanelResizer({ label, value, minimum, maximum, onChange, className }: {
+  label: string;
+  value: number;
+  minimum: number;
+  maximum: number;
+  onChange: (value: number) => void;
+  className: string;
+}) {
+  const dragStart = useRef<{ x: number; width: number } | null>(null);
+  useEffect(() => () => document.body.classList.remove("resizing-panels"), []);
+
+  return (
+    <div
+      className={`panel-resizer ${className}`}
+      role="separator"
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuemin={minimum}
+      aria-valuemax={maximum}
+      aria-valuenow={Math.round(value)}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        dragStart.current = { x: event.clientX, width: value };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        document.body.classList.add("resizing-panels");
+      }}
+      onPointerMove={(event) => {
+        if (!dragStart.current) return;
+        onChange(clamp(dragStart.current.width + event.clientX - dragStart.current.x, minimum, maximum));
+      }}
+      onPointerUp={(event) => {
+        dragStart.current = null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        document.body.classList.remove("resizing-panels");
+      }}
+      onPointerCancel={() => {
+        dragStart.current = null;
+        document.body.classList.remove("resizing-panels");
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const step = event.shiftKey ? 24 : 8;
+        onChange(clamp(value + (event.key === "ArrowRight" ? step : -step), minimum, maximum));
+      }}
+    />
+  );
+}
+
 function formatDate(value?: string): string {
   if (!value) return "Date unavailable";
   const date = new Date(value);
@@ -191,7 +264,7 @@ function HighlightList({ clippings, selectedId, onSelect, onFavorite }: {
               ><Star size={18} weight={clip.favorite ? "fill" : "regular"} /></button>
             </span>
             <span className="highlight-excerpt">{clip.content || "Kindle bookmark"}</span>
-            {clip.reflection && <small className="has-reflection"><NotePencil size={13} /> Reflection added</small>}
+            {clip.reflection && <small className="has-reflection"><NotePencil size={13} /> Note added</small>}
           </div>
         ))}
       </div>
@@ -210,7 +283,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (value: numb
   );
 }
 
-function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
+export function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
   book: BookRecord;
   clip: ClippingRecord;
   onSave: (patch: ClippingPatchLike) => Promise<void>;
@@ -219,25 +292,47 @@ function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
 }) {
   const [reflection, setReflection] = useState(clip.reflection);
   const [tags, setTags] = useState(clip.tags.join(", "));
+  const [notesOpen, setNotesOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  const savePromise = useRef<Promise<boolean> | null>(null);
+  const activeClipId = useRef(clip.id);
   useEffect(() => {
+    const clippingChanged = activeClipId.current !== clip.id;
     setReflection(clip.reflection);
     setTags(clip.tags.join(", "));
+    if (clippingChanged) {
+      activeClipId.current = clip.id;
+      setNotesOpen(false);
+    }
     setSaveState("saved");
+    savePromise.current = null;
   }, [clip.id, clip.reflection, clip.tags]);
 
-  const save = async () => {
-    if (saveState === "saving" || saveState === "saved") return;
-    setSaveState("saving");
-    try {
-      await onSave({ reflection, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) });
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
-    }
+  const save = async (): Promise<boolean> => {
+    if (savePromise.current) return savePromise.current;
+    if (saveState === "saved") return true;
+    const pending = (async () => {
+      setSaveState("saving");
+      try {
+        await onSave({ reflection, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) });
+        setSaveState("saved");
+        return true;
+      } catch {
+        setSaveState("error");
+        return false;
+      } finally {
+        savePromise.current = null;
+      }
+    })();
+    savePromise.current = pending;
+    return pending;
+  };
+  const closeNotes = async () => {
+    if (await save()) setNotesOpen(false);
   };
   const statusText = saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Unsaved changes" : saveState === "error" ? "Could not save" : "Saved to vault";
   const reflectionWords = reflection.trim() ? reflection.trim().split(/\s+/).length : 0;
+  const notesId = `clipping-notes-${clip.id}`;
 
   return (
     <section className="reader-pane" aria-label="Selected clipping">
@@ -247,17 +342,27 @@ function ReaderPane({ book, clip, onSave, onNext, onPrevious }: {
         <blockquote>{clip.content || "This Kindle bookmark does not contain text."}</blockquote>
         <cite>— {book.title}, {book.authors.join(" & ")}</cite>
       </article>
-      <div className="reflection-editor">
+      <div className={`reflection-editor${notesOpen ? " open" : ""}`}>
         <div className="editor-heading">
-          <div><span className="editor-eyebrow">PASSAGE NOTE</span><h3>Your reflection</h3></div>
-          <span className={`save-state save-state-${saveState}`} role="status" aria-live="polite">{statusText}</span>
+          <button
+            type="button"
+            className="notes-toggle"
+            aria-expanded={notesOpen}
+            aria-controls={notesId}
+            onClick={() => { if (notesOpen) void closeNotes(); else setNotesOpen(true); }}
+          >
+            <span><NotePencil size={17} weight={clip.reflection ? "fill" : "regular"} />Notes</span>
+            <CaretDown size={16} aria-hidden="true" />
+          </button>
+          {notesOpen && <span className={`save-state save-state-${saveState}`} role="status" aria-live="polite">{statusText}</span>}
         </div>
-        <p className="reflection-guidance">Capture what this passage changes, challenges, or connects. Markdown is supported.</p>
-        <textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Write your response to this passage…" aria-label="Highlight reflection" />
-        <div className="editor-tags">
-          <Tag size={15} /><input value={tags} onChange={(event) => { setTags(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Add tags, separated by commas" aria-label="Highlight tags" />
-        </div>
-        <div className="editor-footer"><span>{reflectionWords} {reflectionWords === 1 ? "word" : "words"}</span><button className="primary-button" disabled={saveState === "saved" || saveState === "saving"} onClick={() => void save()}>{saveState === "saving" ? "Saving…" : "Save note"}</button></div>
+        {notesOpen && <div id={notesId} className="notes-editor-content">
+          <textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Write a note…" aria-label="Notes" />
+          <div className="editor-tags">
+            <Tag size={15} /><input value={tags} onChange={(event) => { setTags(event.target.value); setSaveState("dirty"); }} onBlur={() => void save()} placeholder="Add tags, separated by commas" aria-label="Note tags" />
+          </div>
+          <div className="editor-footer"><span>{reflectionWords} {reflectionWords === 1 ? "word" : "words"}</span><button className="primary-button" disabled={saveState === "saved" || saveState === "saving"} onClick={() => void save()}>{saveState === "saving" ? "Saving…" : "Save note"}</button></div>
+        </div>}
       </div>
       <div className="reader-pagination"><button onClick={onPrevious}>← Previous</button><button onClick={onNext}>Next →</button></div>
     </section>
@@ -337,7 +442,7 @@ function BookDetails({ book, books, onSave, onMerge }: {
   );
 }
 
-function BookWorkspace({ book, books, authors, onAuthor, onRefresh, onOpenBook, mainMenuVisible, booksVisible, focusMode, onToggleMainMenu, onToggleBooks, onToggleFocus }: {
+function BookWorkspace({ book, books, authors, onAuthor, onRefresh, onOpenBook, mainMenuVisible, booksVisible, onToggleMainMenu, onToggleBooks }: {
   book: BookRecord;
   books: BookSummary[];
   authors: AuthorRecord[];
@@ -346,10 +451,8 @@ function BookWorkspace({ book, books, authors, onAuthor, onRefresh, onOpenBook, 
   onOpenBook: (bookId: string) => void;
   mainMenuVisible: boolean;
   booksVisible: boolean;
-  focusMode: boolean;
   onToggleMainMenu: () => void;
   onToggleBooks: () => void;
-  onToggleFocus: () => void;
 }) {
   const [tab, setTab] = useState<BookTab>("highlights");
   const [selectedClipId, setSelectedClipId] = useState(book.clippings[0]?.id);
@@ -366,15 +469,14 @@ function BookWorkspace({ book, books, authors, onAuthor, onRefresh, onOpenBook, 
     setLocalBook(updated); await onRefresh();
   };
   return (
-    <section className={`book-workspace${focusMode ? " focus-mode" : ""}`}>
+    <section className="book-workspace">
       <header className="book-header">
         <div><h1>{localBook.title}</h1><div className="author-links">{localBook.authors.map((name, index) => { const count = authors.find((author) => author.name === name)?.books.length || 1; return <span key={name}>{index > 0 && <span className="author-separator"> &amp; </span>}<button className="author-link" onClick={() => onAuthor(name)}>{name} · {count} {count === 1 ? "book" : "books"}</button></span>; })}</div></div>
         <div className="book-actions">
-          {!focusMode && <div className="layout-actions" aria-label="Layout controls">
+          <div className="layout-actions" aria-label="Layout controls">
             <button className={`icon-button${mainMenuVisible ? " selected" : ""}`} onClick={onToggleMainMenu} aria-label={`${mainMenuVisible ? "Hide" : "Show"} main menu`} title={`${mainMenuVisible ? "Hide" : "Show"} main menu`}><SidebarSimple size={21} /></button>
             <button className={`icon-button book-list-toggle${booksVisible ? " selected" : ""}`} onClick={onToggleBooks} aria-label={`${booksVisible ? "Hide" : "Show"} books list`} title={`${booksVisible ? "Hide" : "Show"} books list`}><Books size={21} /></button>
-          </div>}
-          <button className={`icon-button${focusMode ? " selected" : ""}`} onClick={onToggleFocus} aria-label={focusMode ? "Exit full-page book view" : "Open full-page book view"} title={focusMode ? "Exit full-page book view" : "Open full-page book view"}>{focusMode ? <ArrowsInSimple size={21} /> : <ArrowsOutSimple size={21} />}</button>
+          </div>
           <button className="secondary-button obsidian-button" onClick={() => void api.openBookInObsidian(localBook.id)}>Open in Obsidian <ArrowSquareOut size={18} /></button>
           <button className="icon-button" aria-label="Show book file" title="Show book file" onClick={() => void api.showBookInFolder(localBook.id)}><FolderOpen size={21} /></button>
         </div>
@@ -552,7 +654,7 @@ function HelpView({ onGoToImports, onGoToSettings }: { onGoToImports: () => void
           <article><span>1</span><div><h2>Choose a vault</h2><p>Use a dedicated Obsidian folder so Reading Desk can keep books, authors, and import records organized.</p></div></article>
           <article><span>2</span><div><h2>Import My Clippings.txt</h2><p>Connect your Kindle, open its documents folder, and choose the latest cumulative export.</p></div></article>
           <article><span>3</span><div><h2>Review before adding</h2><p>Duplicates are skipped. If Kindle identity data collides with different text, Skip remains the safe default.</p></div></article>
-          <article><span>4</span><div><h2>Read and reflect</h2><p>Favorite passages, add tags, and write reflections that are saved back into ordinary Markdown.</p></div></article>
+          <article><span>4</span><div><h2>Read and reflect</h2><p>Favorite passages, add tags, and write clipping notes or book reflections that are saved back into ordinary Markdown.</p></div></article>
         </section>
         <aside className="help-aside">
           <h2>Good to know</h2>
@@ -572,7 +674,7 @@ function Onboarding({ onSelect }: { onSelect: () => Promise<void> }) {
       <BookOpen size={46} weight="light" />
       <span>READING DESK</span>
       <h1>Turn Kindle clippings into a lasting reading practice.</h1>
-      <p>Choose or create a dedicated Obsidian vault. Your books, highlights, and reflections stay as ordinary Markdown on your computer.</p>
+      <p>Choose or create a dedicated Obsidian vault. Your books, highlights, notes, and reflections stay as ordinary Markdown on your computer.</p>
       <button className="primary-button large" onClick={() => void onSelect()}><FolderOpen size={20} /> Choose or create a vault</button>
       <div className="privacy-note"><CheckCircle size={18} /><span>Local-only · no account · no analytics</span></div>
     </main>
@@ -588,12 +690,25 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [mainMenuVisible, setMainMenuVisible] = useState(true);
   const [booksVisible, setBooksVisible] = useState(true);
-  const [focusMode, setFocusMode] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const [primaryNavigationWidth, setPrimaryNavigationWidth] = useState(() =>
+    readStoredWidth(PRIMARY_NAVIGATION_STORAGE_KEY, PRIMARY_NAVIGATION_DEFAULT, PRIMARY_NAVIGATION_MIN, PRIMARY_NAVIGATION_MAX));
+  const [bookListWidth, setBookListWidth] = useState(() =>
+    readStoredWidth(BOOK_LIST_STORAGE_KEY, BOOK_LIST_DEFAULT, BOOK_LIST_MIN, BOOK_LIST_MAX));
   const [updateState, setUpdateState] = useState<AppUpdateState>({
     stage: window.readingDesk ? "idle" : "unsupported",
     currentVersion: appVersion,
     message: window.readingDesk ? undefined : "Update checks are available in the installed Windows app.",
   });
+  const compactNavigation = viewportWidth <= PRIMARY_NAVIGATION_COMPACT_BREAKPOINT;
+  const visibleNavigationWidth = mainMenuVisible
+    ? (compactNavigation ? PRIMARY_NAVIGATION_COMPACT : primaryNavigationWidth)
+    : 0;
+  const maximumBookListWidth = Math.max(
+    BOOK_LIST_MIN,
+    Math.min(BOOK_LIST_MAX, viewportWidth - visibleNavigationWidth - BOOK_WORKSPACE_MIN),
+  );
+  const visibleBookListWidth = clamp(bookListWidth, BOOK_LIST_MIN, maximumBookListWidth);
 
   const refresh = useCallback(async () => {
     const next = await api.getSnapshot();
@@ -611,11 +726,21 @@ export function App() {
     if (!selectedBookId) { setBook(null); return; }
     void api.getBook(selectedBookId).then(setBook);
   }, [selectedBookId, snapshot?.books]);
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  useEffect(() => {
+    try { window.localStorage.setItem(PRIMARY_NAVIGATION_STORAGE_KEY, String(Math.round(primaryNavigationWidth))); } catch { /* Device-local preferences are optional. */ }
+  }, [primaryNavigationWidth]);
+  useEffect(() => {
+    try { window.localStorage.setItem(BOOK_LIST_STORAGE_KEY, String(Math.round(bookListWidth))); } catch { /* Device-local preferences are optional. */ }
+  }, [bookListWidth]);
 
-  const openBook = (bookId: string) => { setSelectedBookId(bookId); setRoute("library"); setFocusMode(false); };
+  const openBook = (bookId: string) => { setSelectedBookId(bookId); setRoute("library"); };
   const openAuthor = (name: string) => {
     setSelectedAuthorName(name);
-    setFocusMode(false);
     setRoute("authors");
   };
 
@@ -623,16 +748,27 @@ export function App() {
   if (!snapshot.vaultPath) return <Onboarding onSelect={async () => { setSnapshot(await api.selectVault()); }} />;
 
   return (
-    <div className={`app-shell${!mainMenuVisible || focusMode ? " main-menu-hidden" : ""}`}>
+    <div
+      className={`app-shell${!mainMenuVisible ? " main-menu-hidden" : ""}`}
+      style={{ "--primary-navigation-width": `${primaryNavigationWidth}px` } as React.CSSProperties}
+    >
       {(updateState.stage === "available" || updateState.stage === "downloaded") && (
         <div className="update-notice" role="status">
           <div><strong>{updateState.stage === "downloaded" ? "Update ready" : `Reading Desk ${updateState.availableVersion || "update"} available`}</strong><span>{updateState.stage === "downloaded" ? "Restart when you are ready to install it." : "Download it from Settings when convenient."}</span></div>
-          <button onClick={() => { setFocusMode(false); setRoute("settings"); }}>View update</button>
+          <button onClick={() => setRoute("settings")}>View update</button>
         </div>
       )}
-      {!focusMode && mainMenuVisible && <Sidebar route={route} setRoute={setRoute} vaultPath={snapshot.vaultPath} onHide={() => setMainMenuVisible(false)} />}
-      {!focusMode && !mainMenuVisible && route !== "library" && <button className="floating-panel-toggle" onClick={() => setMainMenuVisible(true)} aria-label="Show main menu" title="Show main menu"><SidebarSimple size={21} /></button>}
-      {route === "library" && <div className={`library-route${!booksVisible || focusMode ? " books-hidden" : ""}`}>{!focusMode && booksVisible && <LibraryPanel books={snapshot.books} selectedId={selectedBookId} onSelect={setSelectedBookId} onHide={() => setBooksVisible(false)} />}{book ? <BookWorkspace book={book} books={snapshot.books} authors={snapshot.authors} onAuthor={openAuthor} onRefresh={async () => { const next = await refresh(); if (selectedBookId) setBook(await api.getBook(selectedBookId)); void next; }} onOpenBook={openBook} mainMenuVisible={mainMenuVisible} booksVisible={booksVisible} focusMode={focusMode} onToggleMainMenu={() => setMainMenuVisible((value) => !value)} onToggleBooks={() => setBooksVisible((value) => !value)} onToggleFocus={() => setFocusMode((value) => !value)} /> : <div className="empty-workspace"><Books size={42} /><h2>Your library is ready</h2><p>Import My Clippings.txt to create your first book note.</p><button className="primary-button" onClick={() => setRoute("imports")}>Import clippings</button></div>}</div>}
+      {mainMenuVisible && <Sidebar route={route} setRoute={setRoute} vaultPath={snapshot.vaultPath} onHide={() => setMainMenuVisible(false)} />}
+      {mainMenuVisible && !compactNavigation && <PanelResizer label="Resize primary navigation" value={primaryNavigationWidth} minimum={PRIMARY_NAVIGATION_MIN} maximum={PRIMARY_NAVIGATION_MAX} onChange={setPrimaryNavigationWidth} className="primary-navigation-resizer" />}
+      {!mainMenuVisible && route !== "library" && <button className="floating-panel-toggle" onClick={() => setMainMenuVisible(true)} aria-label="Show main menu" title="Show main menu"><SidebarSimple size={21} /></button>}
+      {route === "library" && <div
+        className={`library-route${!booksVisible ? " books-hidden" : ""}`}
+        style={{ "--book-list-width": `${visibleBookListWidth}px` } as React.CSSProperties}
+      >
+        {booksVisible && <LibraryPanel books={snapshot.books} selectedId={selectedBookId} onSelect={setSelectedBookId} onHide={() => setBooksVisible(false)} />}
+        {booksVisible && <PanelResizer label="Resize book list" value={visibleBookListWidth} minimum={BOOK_LIST_MIN} maximum={maximumBookListWidth} onChange={setBookListWidth} className="book-list-resizer" />}
+        {book ? <BookWorkspace book={book} books={snapshot.books} authors={snapshot.authors} onAuthor={openAuthor} onRefresh={async () => { const next = await refresh(); if (selectedBookId) setBook(await api.getBook(selectedBookId)); void next; }} onOpenBook={openBook} mainMenuVisible={mainMenuVisible} booksVisible={booksVisible} onToggleMainMenu={() => setMainMenuVisible((value) => !value)} onToggleBooks={() => setBooksVisible((value) => !value)} /> : <div className="empty-workspace"><Books size={42} /><h2>Your library is ready</h2><p>Import My Clippings.txt to create your first book note.</p><button className="primary-button" onClick={() => setRoute("imports")}>Import clippings</button></div>}
+      </div>}
       {route === "authors" && <AuthorsView authors={snapshot.authors} initialName={selectedAuthorName} onOpenBook={openBook} onMerged={async () => { await refresh(); }} />}
       {route === "imports" && <ImportsView snapshot={snapshot} onCommitted={async () => { await refresh(); }} />}
       {route === "insights" && <InsightsView snapshot={snapshot} />}

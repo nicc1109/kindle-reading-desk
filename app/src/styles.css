@@ -25,7 +25,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #a3454e; outline-offset: 2px; }
 
-.app-shell { width: 100vw; height: 100vh; display: grid; grid-template-columns: 184px minmax(0, 1fr); background: var(--paper); overflow: hidden; }
+.app-shell { width: 100vw; height: 100vh; display: grid; grid-template-columns: var(--primary-navigation-width, 184px) minmax(0, 1fr); background: var(--paper); overflow: hidden; position: relative; }
 .app-shell.main-menu-hidden { grid-template-columns: minmax(0, 1fr); }
 .sidebar { border-right: 1px solid var(--line); background: #faf7f1; display: flex; flex-direction: column; min-height: 0; z-index: 2; }
 .brand { height: 94px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px 0 32px; color: var(--oxblood); }
@@ -42,8 +42,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .vault-status p { margin: 0 0 5px; color: var(--muted); font: 11px/1.3 "Inter", sans-serif; }
 .vault-status strong { display: block; font-size: 14px; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
-.library-route { min-width: 0; min-height: 0; display: grid; grid-template-columns: 410px minmax(0, 1fr); }
+.library-route { min-width: 0; min-height: 0; display: grid; grid-template-columns: var(--book-list-width, 410px) minmax(0, 1fr); position: relative; }
 .library-route.books-hidden { grid-template-columns: minmax(0, 1fr); }
+.panel-resizer { position: absolute; top: 0; bottom: 0; z-index: 8; width: 9px; padding: 0; border: 0; background: transparent; cursor: col-resize; touch-action: none; transform: translateX(-50%); }
+.panel-resizer::after { content: ""; position: absolute; inset: 0 auto 0 4px; width: 1px; background: transparent; transition: background-color 120ms ease, width 120ms ease; }
+.panel-resizer:hover::after, .panel-resizer:focus-visible::after { width: 2px; background: var(--oxblood); }
+.primary-navigation-resizer { left: var(--primary-navigation-width, 184px); }
+.book-list-resizer { left: var(--book-list-width, 410px); }
+body.resizing-panels { cursor: col-resize; user-select: none; }
 .library-panel { border-right: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; background: #faf7f1; }
 .library-search-row { display: flex; gap: 10px; padding: 24px 22px 18px; }
 .search-field { flex: 1; min-width: 0; height: 42px; border: 1px solid var(--line-dark); display: flex; align-items: center; gap: 9px; padding: 0 12px; border-radius: 4px; background: #fffdfa; color: var(--muted); }
@@ -126,19 +132,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .quote-card { flex: 0 0 auto; margin: 0; padding: clamp(32px, 5vh, 58px) 10px 42px 28px; position: relative; }
 .quote-rule { position: absolute; left: 0; top: 48px; width: 4px; height: 116px; background: var(--oxblood); }
 .quote-card blockquote { margin: 0; max-width: 680px; font: 500 clamp(26px, 2.6vw, 39px)/1.35 "Newsreader", Georgia, serif; letter-spacing: -0.018em; }
-.book-workspace.focus-mode .reader-pane { padding-inline: clamp(32px, 5vw, 84px); }
-.book-workspace.focus-mode .quote-card blockquote { max-width: 940px; }
-.quote-card cite { display: block; margin-top: 24px; color: var(--muted); font: italic 17px "Newsreader", Georgia, serif; }
+.quote-card cite { display: block; margin-top: 24px; color: var(--muted); font: italic 15px "Newsreader", Georgia, serif; }
 .reflection-editor { flex: 0 0 auto; margin-top: auto; border: 1px solid var(--line-dark); border-radius: 5px; background: #fffdf9; overflow: hidden; box-shadow: 0 8px 24px rgb(60 43 32 / 5%); }
-.editor-heading { min-height: 72px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
-.editor-heading h3 { margin: 2px 0 0; font: 24px "Newsreader", Georgia, serif; color: #4a211f; }
-.editor-eyebrow { display: block; color: var(--oxblood); font-size: 9px; font-weight: 600; letter-spacing: .13em; }
+.reflection-editor.open .editor-heading { border-bottom: 1px solid var(--line); }
+.editor-heading { min-height: 50px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 13px 0 7px; }
+.notes-toggle { min-width: 0; min-height: 48px; flex: 1; border: 0; background: transparent; padding: 0 9px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #4a211f; font: 19px "Newsreader", Georgia, serif; text-align: left; }
+.notes-toggle > span { display: inline-flex; align-items: center; gap: 8px; }
+.notes-toggle > svg { transition: transform 140ms ease; }
+.notes-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.notes-toggle:hover { color: var(--oxblood); }
 .save-state { flex: 0 0 auto; color: var(--green); font-size: 10px; }
 .save-state-dirty { color: var(--amber); }
 .save-state-saving { color: var(--blue); }
 .save-state-error { color: var(--oxblood); }
-.reflection-guidance { margin: 0; padding: 13px 18px 0; color: var(--muted); font: 13px/1.45 "Newsreader", Georgia, serif; }
-.reflection-editor textarea, .longform-editor textarea { width: 100%; min-height: 190px; resize: vertical; border: 0; outline: 0; padding: 19px 18px; background: transparent; font: 17px/1.55 "Newsreader", Georgia, serif; }
+.notes-editor-content textarea, .longform-editor textarea { width: 100%; min-height: 190px; resize: vertical; border: 0; outline: 0; padding: 19px 18px; background: transparent; font: 17px/1.55 "Newsreader", Georgia, serif; }
 .editor-tags { height: 38px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--muted); }
 .editor-tags input { border: 0; outline: 0; background: transparent; flex: 1; font-size: 11px; }
 .editor-footer { min-height: 50px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 7px 9px 7px 14px; }
@@ -286,6 +293,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .empty-workspace p { margin: 0 0 8px; font: 15px "Newsreader", Georgia, serif; }
 @media (max-width: 1320px) {
   .app-shell { grid-template-columns: 74px minmax(0, 1fr); }
+  .app-shell.main-menu-hidden { grid-template-columns: minmax(0, 1fr); }
   .brand { justify-content: center; padding: 0; }
   .brand .panel-toggle { display: none; }
   .nav-button { justify-content: center; padding: 0; }
@@ -293,7 +301,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .vault-status { padding-inline: 0; display: flex; justify-content: center; }
   .vault-status div { margin-bottom: 0; }
   .vault-status div span { display: none; }
-  .library-route { grid-template-columns: 330px minmax(0, 1fr); }
   .book-header { padding-left: 26px; }
   .book-facts { padding-inline: 26px; }
   .book-actions .obsidian-button { font-size: 0; padding: 0; width: 42px; }
@@ -302,7 +309,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 @media (max-width: 900px) {
-  .library-route { grid-template-columns: 280px minmax(0, 1fr); }
   .book-row { grid-template-columns: minmax(0, 1fr) 50px; }
   .book-row .book-status, .book-list-heading span:nth-child(2) { display: none; }
   .book-list-heading { grid-template-columns: minmax(0, 1fr) 50px; }

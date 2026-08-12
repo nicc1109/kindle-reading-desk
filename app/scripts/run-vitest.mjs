@@ -13,7 +13,7 @@ const environment = {
 };
 
 const executable = path.resolve(process.cwd(), "node_modules", "vitest", "vitest.mjs");
-const result = spawnSync(process.execPath, [executable, "run", "tests/parser.test.ts", "tests/vault.test.ts"], {
+const result = spawnSync(process.execPath, [executable, "run", "tests/parser.test.ts", "tests/vault.test.ts", "tests/app.test.tsx"], {
   cwd: process.cwd(),
   env: environment,
   stdio: "inherit",

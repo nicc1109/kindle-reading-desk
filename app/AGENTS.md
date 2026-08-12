@@ -14,7 +14,9 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - The approved visual target is the revised “Reading Desk” mock: warm editorial styling, compact searchable book list, and one book workspace at a time.
 - Books are the primary unit. Highlights sort by page/location inside a book; authors, imports, and book-level reading insights are supporting views.
 - The library orders books by their latest clipping timestamp, the only reading-recency signal available in My Clippings.txt.
-- A selected book has an optional full-page focus mode. The primary navigation and book list also have independent hide/show controls.
+- The primary navigation and book list are resizable desktop panes. Their preferred widths persist locally, while compact layouts clamp them without discarding those preferences.
+- Clipping-level writing is called Notes in the UI. The Notes editor is collapsed whenever a clipping is selected and opens only on demand; book-level reflection remains a separate feature.
+- There is no separate full-page book mode. Independent pane visibility and resizing provide the workspace controls.
 - List rows are explicitly excerpts; the selected clipping view must always render the complete text stored in My Clippings.txt.
 - The Obsidian vault is canonical. Existing clipping blocks are append-only during imports; user-authored Markdown outside managed regions must be preserved.
 - The first release is local-only, English UI, and has no account, analytics, cloud database, external metadata lookup, or AI feature.
