@@ -56,14 +56,19 @@ try {
   checks.push(["book workspace loaded from Markdown vault", await window.getByText("Preferences are optional; constraints are not.", { exact: true }).first().isVisible()]);
 
   await window.getByRole("button", { name: "Authors" }).click();
-  checks.push(["author page lists imported book", await window.getByRole("button", { name: /Constraints/ }).isVisible()]);
+  await window.getByRole("button", { name: /Constraints/ }).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["author page lists imported book", true]);
   await window.getByRole("button", { name: "Reading insights" }).click();
-  checks.push(["reading insights rendered", await window.getByRole("heading", { name: "A quiet view of your reading" }).isVisible()]);
+  await window.getByRole("heading", { name: "A quiet view of your reading" }).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["reading insights rendered", true]);
   await window.getByRole("button", { name: "Settings" }).click();
-  checks.push(["settings rendered", await window.getByRole("heading", { name: "Your reading desk, kept local" }).isVisible()]);
-  checks.push(["release version rendered", await window.getByText(packageJson.version, { exact: true }).isVisible()]);
+  await window.getByRole("heading", { name: "Your reading desk, kept local" }).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["settings rendered", true]);
+  await window.getByText(packageJson.version, { exact: true }).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["release version rendered", true]);
   await window.getByRole("button", { name: "Help" }).click();
-  checks.push(["help rendered", await window.getByRole("heading", { name: "From Kindle export to reading notes" }).isVisible()]);
+  await window.getByRole("heading", { name: "From Kindle export to reading notes" }).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["help rendered", true]);
   await window.getByRole("button", { name: "Library" }).click();
 
   await window.getByRole("button", { name: "Notes" }).click();
@@ -79,7 +84,8 @@ try {
   const exportDialog = window.getByRole("dialog", { name: "Export to Google Docs" });
   await exportDialog.waitFor();
   checks.push(["Google Docs preload bridge available", await window.evaluate(() => typeof window.readingDesk?.exportBookToGoogleDocs === "function" && typeof window.readingDesk?.cancelGoogleDocsExport === "function")]);
-  checks.push(["missing OAuth configuration explained", await exportDialog.getByText(/Add a Google Desktop OAuth JSON/).isVisible()]);
+  await exportDialog.getByText(/Add a Google Desktop OAuth JSON/).waitFor({ state: "visible", timeout: 10000 });
+  checks.push(["missing OAuth configuration explained", true]);
   checks.push(["packaged Google Docs preview renders complete highlight", (await exportDialog.locator(".export-highlight strong").innerText()).trim() === "Preferences are optional; constraints are not."]);
   await exportDialog.getByRole("button", { name: "Close" }).click();
 
