@@ -50,4 +50,18 @@ describe("Google OAuth desktop flow", () => {
     await expect(authorizeGoogleDocs(client, async () => { controller.abort(); }, controller.signal)).rejects.toThrow("canceled");
     await expect(authorizeGoogleDocs(client, async () => { throw new Error("shell failed"); }, new AbortController().signal)).rejects.toThrow("open the browser");
   });
+
+  it("reports cancellation during the token exchange clearly", async () => {
+    const realFetch = fetch;
+    const controller = new AbortController();
+    vi.stubGlobal("fetch", vi.fn((_url, options) => new Promise<Response>((_resolve, reject) => {
+      const tokenSignal = options?.signal;
+      tokenSignal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    })));
+    await expect(authorizeGoogleDocs(client, async (url) => {
+      const auth = new URL(url);
+      await realFetch(`${auth.searchParams.get("redirect_uri")}/?state=${auth.searchParams.get("state")}&code=good-code`);
+      controller.abort();
+    }, controller.signal)).rejects.toThrow("canceled");
+  });
 });

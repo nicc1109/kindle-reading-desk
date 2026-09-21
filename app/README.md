@@ -1,6 +1,6 @@
 # Reading Desk
 
-Current desktop release: **0.2.7**.
+Current desktop release: **0.3.0**.
 
 [Download the latest Windows installer](https://github.com/nicc1109/kindle-reading-desk/releases/latest)
 
@@ -52,10 +52,10 @@ To publish a version:
 3. Tag that commit, for example `git tag v0.2.2`.
 4. Push the commit and tag: `git push origin main --follow-tags`.
 
-The Windows release workflow builds the installer, runs the tests, and attaches the `.exe`, `.blockmap`, and `latest.yml` update metadata to a normal GitHub Release. Releases must not be marked as prereleases because stable installed copies ignore prerelease updates.
+The Windows release workflow builds the installer, runs the tests and packaged-app QA, verifies that the installer filename, size, and SHA-512 hash match `latest.yml`, and attaches the `.exe`, `.blockmap`, and update manifest to a normal GitHub Release. Releases must not be marked as prereleases because stable installed copies ignore prerelease updates.
 
-## Google Docs export (integration prepared)
+## Google Docs export
 
-Use the export icon in a book header to preview all highlights in bold, with normal-weight Notes paragraphs. Creating a real Google Doc requires the desktop OAuth configuration. See [setup and verification](docs/GOOGLE-DOCS.md). Each export creates a new document and does not overwrite annotations.
+Use the export icon in a book header to preview all highlights in bold, with normal-weight Notes paragraphs. The packaged Windows app can create the document when a Google Desktop OAuth client is configured. See [setup, packaged configuration, costs, and limitations](docs/GOOGLE-DOCS.md). Each export creates a new document and does not overwrite annotations.
 
 See the [project review and monetization proposal](docs/REVISION-2026-09-20.md) for findings, priorities, and outstanding validation.

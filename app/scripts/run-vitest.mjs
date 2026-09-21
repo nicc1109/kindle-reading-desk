@@ -13,7 +13,7 @@ const environment = {
 };
 
 const executable = path.resolve(process.cwd(), "node_modules", "vitest", "vitest.mjs");
-const result = spawnSync(process.execPath, [executable, "run", "tests/parser.test.ts", "tests/vault.test.ts", "tests/vault-watcher.test.ts", "tests/ipc-security.test.ts", "tests/accessibility.test.ts", "tests/library-scale.test.ts", "tests/library-render-scale.test.tsx", "tests/app.test.tsx", "tests/google-docs.test.ts", "tests/google-oauth.test.ts", "tests/google-docs-ui.test.tsx"], {
+const result = spawnSync(process.execPath, [executable, "run", "tests/parser.test.ts", "tests/vault.test.ts", "tests/vault-watcher.test.ts", "tests/ipc-security.test.ts", "tests/desktop-integration.test.ts", "tests/accessibility.test.ts", "tests/library-scale.test.ts", "tests/library-render-scale.test.tsx", "tests/app.test.tsx", "tests/google-docs.test.ts", "tests/google-oauth.test.ts", "tests/google-docs-ui.test.tsx"], {
   cwd: process.cwd(),
   env: environment,
   stdio: "inherit",

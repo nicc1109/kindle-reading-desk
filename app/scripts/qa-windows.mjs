@@ -74,6 +74,15 @@ try {
   checks.push(["note saved through Electron IPC", (await readFile((await repository.scanBooks())[0].vaultPath, "utf8")).includes("Saved through the packaged Windows app.")]);
   checks.push(["open in Obsidian action rendered", await window.getByRole("button", { name: /Open in Obsidian/ }).isVisible()]);
 
+  checks.push(["Google Docs action rendered in packaged app", await window.getByRole("button", { name: "Export to Google Docs", exact: true }).isVisible()]);
+  await window.getByRole("button", { name: "Export to Google Docs", exact: true }).click();
+  const exportDialog = window.getByRole("dialog", { name: "Export to Google Docs" });
+  await exportDialog.waitFor();
+  checks.push(["Google Docs preload bridge available", await window.evaluate(() => typeof window.readingDesk?.exportBookToGoogleDocs === "function" && typeof window.readingDesk?.cancelGoogleDocsExport === "function")]);
+  checks.push(["missing OAuth configuration explained", await exportDialog.getByText(/Add a Google Desktop OAuth JSON/).isVisible()]);
+  checks.push(["packaged Google Docs preview renders complete highlight", (await exportDialog.locator(".export-highlight strong").innerText()).trim() === "Preferences are optional; constraints are not."]);
+  await exportDialog.getByRole("button", { name: "Close" }).click();
+
   await window.screenshot({ path: output });
   checks.push(["native Windows screenshot captured", true]);
   for (const [name, passed] of checks) assert.equal(passed, true, `Windows QA failed: ${name}`);

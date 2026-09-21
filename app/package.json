@@ -20,6 +20,7 @@
     "capture:qa": "electron scripts/capture-electron.mjs",
     "capture:browser": "node scripts/capture-browser.mjs",
     "qa:windows": "node scripts/qa-windows.mjs",
+    "verify:release": "node scripts/verify-release-artifacts.mjs",
     "compare:qa": "node scripts/compare-images.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs"
   },
@@ -54,6 +55,7 @@
   "build": {
     "appId": "com.readingdesk.kindle",
     "productName": "Reading Desk",
+    "artifactName": "Reading-Desk-Setup-${version}.${ext}",
     "asar": true,
     "directories": {
       "output": "release"

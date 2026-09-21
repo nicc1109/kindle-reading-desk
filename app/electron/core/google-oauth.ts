@@ -35,7 +35,10 @@ export async function authorizeGoogleDocs(
   const redirectUri = `http://127.0.0.1:${address.port}`;
   try {
     const code = await new Promise<string>((resolve, reject) => {
+      let settled = false;
       const finish = (error?: Error, code?: string) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         signal.removeEventListener("abort", abort);
         if (error) reject(error); else resolve(code!);
@@ -72,10 +75,20 @@ export async function authorizeGoogleDocs(
     });
     const body = new URLSearchParams({ client_id: client.clientId, code, code_verifier: verifier, redirect_uri: redirectUri, grant_type: "authorization_code" });
     if (client.clientSecret) body.set("client_secret", client.clientSecret);
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST", body, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
-    });
-    if (!response.ok) throw new Error("Google sign-in could not be completed. Check the app configuration and try again.");
+    let response: Response;
+    try {
+      signal.throwIfAborted();
+      response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST", body, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      });
+    } catch {
+      if (signal.aborted) throw new Error("Google sign-in was canceled.");
+      throw new Error("Google sign-in could not reach the token service. Check your connection and try again.");
+    }
+    if (!response.ok) {
+      if (response.status === 400) throw new Error("Google sign-in expired or the authorization code was already used. Please try again.");
+      throw new Error("Google sign-in could not be completed. Check the desktop OAuth configuration and try again.");
+    }
     const token = await response.json() as { access_token?: string; scope?: string };
     if (!token.access_token || !token.scope?.split(" ").includes(GOOGLE_DOCS_SCOPE)) throw new Error("Google did not grant permission to create documents.");
     return token.access_token;

@@ -3,9 +3,13 @@
 ## 0.3.0 - 2026-09-21
 
 - Added the prepared Google Docs export flow to the packaged release path.
+- Hardened desktop OAuth cancellation and token-expiry reporting without persisting account tokens.
+- Added large-book chunking, quota-aware errors, and recoverable partial-export links.
 - Fixed Obsidian deep links to open the correct vault-relative book file.
 - Preserved Kindle highlight text literally when it contains Markdown punctuation.
+- Added a backup-backed schema v4 repair for previously generated Markdown notes.
 - Bumped the packaged app version so the Windows updater can discover this release.
+- Made installer naming deterministic and added release-manifest hash and size verification before publishing.
 
 ## 0.2.7 - 2026-08-12
 

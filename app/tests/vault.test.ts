@@ -73,7 +73,7 @@ describe("Markdown vault repository", () => {
     expect(originalMarkdown).toContain("### Highlight — Page 10 · Location 100–101");
     expect(originalMarkdown).not.toContain("**My reflection**");
     expect(originalMarkdown).not.toContain("#### My note");
-    await writeFile(book.vaultPath!, `${originalMarkdown.replace("reading_desk_version: 3", "reading_desk_version: 3\nmy_custom_frontmatter: keep-me")}\n## My independent section\nDo not change this.\n`, "utf8");
+    await writeFile(book.vaultPath!, `${originalMarkdown.replace("reading_desk_version: 4", "reading_desk_version: 4\nmy_custom_frontmatter: keep-me")}\n## My independent section\nDo not change this.\n`, "utf8");
     await repository.updateBook(book.id, { reflection: "The whole-book reflection." });
     await repository.updateClipping(book.id, book.clippings[0].id, { reflection: "A clipping reflection.", favorite: true });
 
@@ -174,6 +174,42 @@ describe("Markdown vault repository", () => {
     });
   });
 
+  it("repairs legacy Markdown-sensitive quotes with a backup and preserves user sections", async () => {
+    const root = await tempDirectory();
+    const vaultPath = path.join(root, "vault");
+    const exportPath = path.join(root, "My Clippings.txt");
+    const literal = "# heading\n*emphasis* [link](target)\n1. item\n- dash\n\\literal\\";
+    const source = [
+      "Markdown Book (Jane Doe)",
+      "- Your Highlight on page 1 | Location 1 | Added on Friday, October 13, 2023 04:15:54 PM",
+      "",
+      literal,
+      "==========",
+    ].join("\n");
+    await writeFile(exportPath, source, "utf8");
+    const repository = new VaultRepository(vaultPath);
+    await repository.commitImport((await repository.previewImport(exportPath)).token);
+    const book = (await repository.scanBooks())[0];
+    const current = await readFile(book.vaultPath!, "utf8");
+    const rawQuote = literal.split("\n").map((line) => `> ${line}`).join("\n");
+    const legacy = `${current
+      .replace("reading_desk_version: 4", "reading_desk_version: 3")
+      .replace(/<!-- reading-desk:quote:start -->[\s\S]*?<!-- reading-desk:quote:end -->/, `<!-- reading-desk:quote:start -->\n${rawQuote}\n<!-- reading-desk:quote:end -->`)}\n## Personal analysis\nKeep **my Markdown** exactly.\n`;
+    await writeFile(book.vaultPath!, legacy, "utf8");
+
+    const reopened = new VaultRepository(vaultPath);
+    const repairedBook = (await reopened.scanBooks())[0];
+    const repaired = await readFile(book.vaultPath!, "utf8");
+    expect(repaired).toContain("reading_desk_version: 4");
+    expect(repaired).toContain("> \\# heading");
+    expect(repaired).toContain("> \\*emphasis\\* \\[link\\]\\(target\\)");
+    expect(repaired).toContain("## Personal analysis\nKeep **my Markdown** exactly.");
+    expect(repairedBook.clippings[0].content).toBe(literal);
+    const backupDirectory = path.join(vaultPath, ".kindle-library", "backups", "markdown-v4");
+    const [backup] = await readdir(backupDirectory);
+    expect(await readFile(path.join(backupDirectory, backup), "utf8")).toBe(legacy);
+  });
+
   it("preserves target Markdown and backs up both books before a merge", async () => {
     const root = await tempDirectory();
     const vaultPath = path.join(root, "vault");
@@ -195,10 +231,10 @@ describe("Markdown vault repository", () => {
     const source = books.find((book) => book.title === "A Second Book")!;
     await repository.updateBook(source.id, { reflection: "Source reflection" });
     const targetBefore = (await readFile(target.vaultPath!, "utf8"))
-      .replace("reading_desk_version: 3", "reading_desk_version: 3\ncustom_target: keep-me")
+      .replace("reading_desk_version: 4", "reading_desk_version: 4\ncustom_target: keep-me")
       .concat("\n## Independent target section\nNever remove this.\n");
     const sourceBefore = (await readFile(source.vaultPath!, "utf8"))
-      .replace("reading_desk_version: 3", "reading_desk_version: 3\ncustom_source: recover-me")
+      .replace("reading_desk_version: 4", "reading_desk_version: 4\ncustom_source: recover-me")
       .concat("\n## Independent source section\nRecover this too.\n");
     await writeFile(target.vaultPath!, targetBefore, "utf8");
     await writeFile(source.vaultPath!, sourceBefore, "utf8");

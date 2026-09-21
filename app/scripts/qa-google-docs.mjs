@@ -55,7 +55,7 @@ try {
   assert.ok(await window.evaluate(() => typeof window.readingDesk.exportBookToGoogleDocs === "function" && typeof window.readingDesk.cancelGoogleDocsExport === "function"));
   await window.getByRole("button", { name: "Export to Google Docs", exact: true }).click();
   await window.getByRole("dialog").waitFor();
-  assert.ok(await window.getByText(/not configured in this installation/).isVisible());
+  assert.ok(await window.getByText(/Add a Google Desktop OAuth JSON/).isVisible());
   assert.equal((await window.locator(".export-highlight strong").innerText()).trimEnd(), "A complete highlight for export.");
   assert.equal(await readFile((await vault.scanBooks())[0].vaultPath, "utf8"), before);
   checks.push("fresh Electron build: preload IPC, unconfigured state, actual vault preview, no vault mutation");

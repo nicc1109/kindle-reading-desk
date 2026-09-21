@@ -10,6 +10,8 @@ import { watchVaultDirectories } from "./core/vault-watcher.js";
 import { assertTrustedIpcEvent, requireBookPatch, requireClippingPatch, requireConflictResolution, requireString } from "./core/ipc-security.js";
 import { authorizeGoogleDocs, parseGoogleOAuthClient } from "./core/google-oauth.js";
 import { createHighlightsDocument } from "./core/google-docs.js";
+import { obsidianOpenUrl } from "./core/obsidian.js";
+import { reduceUpdaterState, type UpdaterEvent } from "./core/updater-state.js";
 
 const { autoUpdater } = electronUpdater;
 
@@ -22,10 +24,13 @@ let vaultWatchState: VaultWatchState = { status: "stopped" };
 let googleExportController: AbortController | null = null;
 let trustedRendererUrl: string | null = null;
 
+function googleOAuthConfigPath(): string {
+  return process.env.READING_DESK_GOOGLE_OAUTH_CONFIG || path.join(app.getPath("userData"), "google-oauth-client.json");
+}
+
 async function googleOAuthClient() {
   // Account tokens remain in the main process for one export and are never persisted.
-  const configPath = process.env.READING_DESK_GOOGLE_OAUTH_CONFIG || path.join(app.getPath("userData"), "google-oauth-client.json");
-  return parseGoogleOAuthClient(JSON.parse(await readFile(configPath, "utf8")));
+  return parseGoogleOAuthClient(JSON.parse(await readFile(googleOAuthConfigPath(), "utf8")));
 }
 let updateState: AppUpdateState = {
   stage: "idle",
@@ -98,12 +103,15 @@ function publishUpdateState(patch: Partial<AppUpdateState>): AppUpdateState {
   return updateState;
 }
 
+function publishUpdaterEvent(event: UpdaterEvent): AppUpdateState {
+  updateState = reduceUpdaterState(updateState, app.getVersion(), event);
+  mainWindow?.webContents.send("app:update:state", updateState);
+  return updateState;
+}
+
 function configureUpdater(): void {
   if (!updaterIsSupported()) {
-    publishUpdateState({
-      stage: "unsupported",
-      message: "Update checks are available in the installed Windows app.",
-    });
+    publishUpdaterEvent({ type: "unsupported" });
     return;
   }
 
@@ -111,35 +119,12 @@ function configureUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
 
-  autoUpdater.on("checking-for-update", () => publishUpdateState({ stage: "checking", message: undefined }));
-  autoUpdater.on("update-available", (info) => publishUpdateState({
-    stage: "available",
-    availableVersion: info.version,
-    progress: undefined,
-    message: `Reading Desk ${info.version} is ready to download.`,
-  }));
-  autoUpdater.on("update-not-available", () => publishUpdateState({
-    stage: "up-to-date",
-    availableVersion: undefined,
-    progress: undefined,
-    message: "You are using the latest version.",
-  }));
-  autoUpdater.on("download-progress", (progress) => publishUpdateState({
-    stage: "downloading",
-    progress: Math.max(0, Math.min(100, Math.round(progress.percent))),
-    message: "Downloading the update…",
-  }));
-  autoUpdater.on("update-downloaded", (info) => publishUpdateState({
-    stage: "downloaded",
-    availableVersion: info.version,
-    progress: 100,
-    message: "The update is ready. Restart Reading Desk to install it.",
-  }));
-  autoUpdater.on("error", (error) => publishUpdateState({
-    stage: "error",
-    progress: undefined,
-    message: `Update check failed: ${error.message}`,
-  }));
+  autoUpdater.on("checking-for-update", () => publishUpdaterEvent({ type: "checking" }));
+  autoUpdater.on("update-available", (info) => publishUpdaterEvent({ type: "available", version: info.version }));
+  autoUpdater.on("update-not-available", () => publishUpdaterEvent({ type: "up-to-date" }));
+  autoUpdater.on("download-progress", (progress) => publishUpdaterEvent({ type: "downloading", percent: progress.percent }));
+  autoUpdater.on("update-downloaded", (info) => publishUpdaterEvent({ type: "downloaded", version: info.version }));
+  autoUpdater.on("error", (error) => publishUpdaterEvent({ type: "error", message: error.message }));
 }
 
 async function checkForUpdates(): Promise<AppUpdateState> {
@@ -148,29 +133,22 @@ async function checkForUpdates(): Promise<AppUpdateState> {
     message: "Update checks are available in the installed Windows app.",
   });
   if (["checking", "downloading", "downloaded"].includes(updateState.stage)) return updateState;
-  publishUpdateState({ stage: "checking", message: undefined });
+  publishUpdaterEvent({ type: "checking" });
   try {
     await autoUpdater.checkForUpdates();
   } catch (error) {
-    publishUpdateState({
-      stage: "error",
-      message: `Update check failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-    });
+    publishUpdaterEvent({ type: "error", message: error instanceof Error ? error.message : "Unknown error" });
   }
   return updateState;
 }
 
 async function downloadUpdate(): Promise<AppUpdateState> {
   if (!updaterIsSupported() || updateState.stage !== "available") return updateState;
-  publishUpdateState({ stage: "downloading", progress: 0, message: "Starting download…" });
+  publishUpdaterEvent({ type: "downloading", percent: 0 });
   try {
     await autoUpdater.downloadUpdate();
   } catch (error) {
-    publishUpdateState({
-      stage: "error",
-      progress: undefined,
-      message: `Update download failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-    });
+    publishUpdateState({ stage: "error", progress: undefined, message: `Update download failed: ${error instanceof Error ? error.message : "Unknown error"}` });
   }
   return updateState;
 }
@@ -187,7 +165,7 @@ function registerIpc(): void {
       await googleOAuthClient();
       return { available: true, message: "Sign in to Google to create a new document. Only this book's highlights will be sent." };
     } catch {
-      return { available: false, message: "Google Docs export is not configured in this installation yet. You can preview the document below." };
+      return { available: false, message: `Google Docs export is not configured. Add a Google Desktop OAuth JSON at ${googleOAuthConfigPath()}, then restart Reading Desk. You can still preview the document below.` };
     }
   });
   handle("google-docs:export", async (bookId: unknown) => {
@@ -257,10 +235,7 @@ function registerIpc(): void {
     const book = await requireRepository().getBook(requireString(bookId, "book ID"));
     if (!book?.vaultPath) return false;
     try {
-      const vault = requireRepository().vaultPath;
-      const file = path.relative(vault, book.vaultPath).replace(/\\/g, "/").replace(/\.md$/i, "");
-      const uri = `obsidian://open?${new URLSearchParams({ vault: path.basename(vault), file }).toString()}`;
-      await shell.openExternal(uri);
+      await shell.openExternal(obsidianOpenUrl(requireRepository().vaultPath, book.vaultPath));
       return true;
     } catch {
       shell.showItemInFolder(book.vaultPath);

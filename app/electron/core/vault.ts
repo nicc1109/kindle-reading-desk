@@ -35,6 +35,7 @@ const CLIPPINGS_START = "<!-- reading-desk:clippings:start -->";
 const CLIPPINGS_END = "<!-- reading-desk:clippings:end -->";
 const MANAGED_START = "<!-- reading-desk:managed:start -->";
 const MANAGED_END = "<!-- reading-desk:managed:end -->";
+const READING_DESK_SCHEMA_VERSION = 4;
 
 interface ImportSession {
   filePath: string;
@@ -183,7 +184,7 @@ function ownedFrontmatter(book: BookRecord): Record<string, unknown> {
     first_clipping: book.firstClippingAt || null,
     last_clipping: book.lastClippingAt || null,
     clipping_count: book.clippings.length,
-    reading_desk_version: 3,
+    reading_desk_version: READING_DESK_SCHEMA_VERSION,
   };
 }
 
@@ -249,7 +250,7 @@ export function parseBookMarkdown(markdown: string, vaultPath?: string): BookRec
         .split("\n")
         .map((line) => line.replace(/^> ?/, ""))
         .join("\n")
-        .replace(/\\([\x60*_{}\[\]()>#+!|~]|[-+]|\\.)/g, "$1")
+        .replace(/\\([\\\x60*_{}\[\]()>#+!|~.+-])/g, "$1")
         .replace(/^\*\(No text — Kindle bookmark\)\*$/, "")
         .trim();
       const clippingReflection = between(
@@ -325,6 +326,20 @@ function replaceBetween(markdown: string, start: string, end: string, value: str
   return `${markdown.slice(0, startIndex + start.length)}\n${value.trim()}\n${markdown.slice(endIndex)}`;
 }
 
+function replaceClippingQuote(markdown: string, clip: ClippingRecord): string {
+  const blockStart = markdown.indexOf(`<!-- reading-desk:clipping:start id="${clip.id}"`);
+  const blockEnd = markdown.indexOf(`<!-- reading-desk:clipping:end id="${clip.id}" -->`, blockStart);
+  const quoteStartMarker = "<!-- reading-desk:quote:start -->";
+  const quoteEndMarker = "<!-- reading-desk:quote:end -->";
+  const quoteStart = markdown.indexOf(quoteStartMarker, blockStart);
+  const quoteEnd = markdown.indexOf(quoteEndMarker, quoteStart + quoteStartMarker.length);
+  if (blockStart < 0 || blockEnd < 0 || quoteStart < blockStart || quoteEnd < 0 || quoteEnd > blockEnd) {
+    throw new Error(`Cannot repair clipping ${clip.id}: managed quote markers are missing`);
+  }
+  const contentStart = quoteStart + quoteStartMarker.length;
+  return `${markdown.slice(0, contentStart)}\n${quoteMarkdown(clip.content)}\n${markdown.slice(quoteEnd)}`;
+}
+
 function validateBookMarkdown(markdown: string, expected: BookRecord): void {
   const parsed = parseBookMarkdown(markdown);
   if (parsed.id !== expected.id) throw new Error("Pre-write validation failed: book identity changed");
@@ -362,6 +377,7 @@ export class VaultRepository {
   private sessions = new Map<string, ImportSession>();
   private bookCache: BookRecord[] | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
+  private markdownRepairChecked = false;
 
   constructor(public readonly vaultPath: string) {}
 
@@ -395,6 +411,7 @@ export class VaultRepository {
   async scanBooks(): Promise<BookRecord[]> {
     if (this.bookCache) return structuredClone(this.bookCache);
     await this.initialize();
+    await this.repairGeneratedMarkdown();
     const names = (await readdir(this.booksPath)).filter((name) => name.toLowerCase().endsWith(".md"));
     const books: BookRecord[] = [];
     for (const name of names) {
@@ -407,6 +424,39 @@ export class VaultRepository {
     }
     this.bookCache = books.sort((left, right) => left.title.localeCompare(right.title));
     return structuredClone(this.bookCache);
+  }
+
+  async repairGeneratedMarkdown(): Promise<number> {
+    if (this.markdownRepairChecked) return 0;
+    this.markdownRepairChecked = true;
+    await this.initialize();
+    const names = (await readdir(this.booksPath)).filter((name) => name.toLowerCase().endsWith(".md"));
+    const backupDirectory = path.join(this.metadataPath, "backups", `markdown-v${READING_DESK_SCHEMA_VERSION}`);
+    let repaired = 0;
+    for (const name of names) {
+      const filePath = path.join(this.booksPath, name);
+      let original: string;
+      try { original = await readFile(filePath, "utf8"); } catch { continue; }
+      try {
+        const { data } = parseFrontmatter(original);
+        if (Number(data.reading_desk_version) >= READING_DESK_SCHEMA_VERSION) continue;
+        if (!original.includes(CLIPPINGS_START) || !original.includes(CLIPPINGS_END)) continue;
+        const book = parseBookMarkdown(original, filePath);
+        let updated = original;
+        for (const clip of book.clippings) updated = replaceClippingQuote(updated, clip);
+        updated = replaceFrontmatter(updated, book);
+        if (updated === original) continue;
+        validateBookMarkdown(updated, book);
+        await mkdir(backupDirectory, { recursive: true });
+        await atomicWrite(path.join(backupDirectory, `${name}.before-v${READING_DESK_SCHEMA_VERSION}`), original);
+        await atomicWriteBookIfCurrent(filePath, original, updated, book, backupDirectory);
+        repaired += 1;
+      } catch {
+        // A malformed or hand-authored Markdown file is never rewritten automatically.
+      }
+    }
+    if (repaired) this.invalidate();
+    return repaired;
   }
 
   invalidate(): void { this.bookCache = null; }
