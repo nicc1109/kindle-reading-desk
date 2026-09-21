@@ -76,7 +76,7 @@ function quoteMarkdown(value: string): string {
   return value.split("\n").map((line) => `> ${line}`).join("\n");
 }
 
-function summary(book: BookRecord): BookSummary {
+export function summarizeBook(book: BookRecord): BookSummary {
   return {
     id: book.id,
     title: book.title,
@@ -87,14 +87,6 @@ function summary(book: BookRecord): BookSummary {
     clippingCount: book.clippings.length,
     firstClippingAt: book.firstClippingAt,
     lastClippingAt: book.lastClippingAt,
-    searchText: [
-      book.title,
-      ...book.authors,
-      ...book.aliases,
-      ...book.tags,
-      book.reflection,
-      ...book.clippings.flatMap((clip) => [clip.content, clip.reflection, ...clip.tags]),
-    ].join(" ").toLocaleLowerCase("en"),
   };
 }
 
@@ -182,7 +174,7 @@ function ownedFrontmatter(book: BookRecord): Record<string, unknown> {
     first_clipping: book.firstClippingAt || null,
     last_clipping: book.lastClippingAt || null,
     clipping_count: book.clippings.length,
-    reading_desk_version: 2,
+    reading_desk_version: 3,
   };
 }
 
@@ -262,12 +254,20 @@ export function parseBookMarkdown(markdown: string, vaultPath?: string): BookRec
   }
 
   const dateInfo = bookDates(clippings);
+  const title = String(data.title || "Untitled");
+  const authors = Array.isArray(data.authors) ? data.authors.map(String) : ["Unknown author"];
+  const aliases = Array.isArray(data.aliases) ? data.aliases.map(String) : [];
+  const sourceKeys = Array.isArray(data.source_keys) ? data.source_keys.map(String) : [];
+  if ((Number(data.reading_desk_version) || 1) < 3) {
+    const sourceTitles = aliases.length ? aliases : [`${title} (${authors.join("; ")})`];
+    for (const sourceTitle of sourceTitles) sourceKeys.push(`book-source-${shortHash(normalizedKey(sourceTitle))}`);
+  }
   return {
     id: String(data.kindle_id || `book-${shortHash(String(data.title || "untitled"))}`),
-    sourceKeys: Array.isArray(data.source_keys) ? data.source_keys.map(String) : [],
-    title: String(data.title || "Untitled"),
-    authors: Array.isArray(data.authors) ? data.authors.map(String) : ["Unknown author"],
-    aliases: Array.isArray(data.aliases) ? data.aliases.map(String) : [],
+    sourceKeys: [...new Set(sourceKeys)],
+    title,
+    authors,
+    aliases,
     status: ["Reading", "Finished", "Paused", "Reference"].includes(String(data.status))
       ? (String(data.status) as BookRecord["status"])
       : "Reading",
@@ -330,9 +330,28 @@ async function atomicWriteBook(filePath: string, markdown: string, expected: Boo
   await atomicWrite(filePath, markdown);
 }
 
+async function assertFileCurrent(filePath: string, expectedMarkdown: string, recoveryPath?: string): Promise<void> {
+  if (await readFile(filePath, "utf8") === expectedMarkdown) return;
+  const recovery = recoveryPath ? ` Recovery copies are available in ${recoveryPath}.` : "";
+  throw new Error(`The book changed in another editor before Reading Desk could save it.${recovery}`);
+}
+
+async function atomicWriteBookIfCurrent(
+  filePath: string,
+  originalMarkdown: string,
+  markdown: string,
+  expected: BookRecord,
+  recoveryPath?: string,
+): Promise<void> {
+  validateBookMarkdown(markdown, expected);
+  await assertFileCurrent(filePath, originalMarkdown, recoveryPath);
+  await atomicWrite(filePath, markdown);
+}
+
 export class VaultRepository {
   private sessions = new Map<string, ImportSession>();
   private bookCache: BookRecord[] | null = null;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(public readonly vaultPath: string) {}
 
@@ -340,6 +359,17 @@ export class VaultRepository {
   private get authorsPath(): string { return path.join(this.vaultPath, "Authors"); }
   private get indexPath(): string { return path.join(this.vaultPath, "_Index"); }
   private get metadataPath(): string { return path.join(this.vaultPath, ".kindle-library"); }
+
+  private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.writeQueue.then(operation, operation);
+    this.writeQueue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  private async currentBook(bookId: string): Promise<BookRecord | null> {
+    this.invalidate();
+    return this.getBook(bookId);
+  }
 
   async initialize(): Promise<void> {
     await Promise.all([
@@ -377,7 +407,7 @@ export class VaultRepository {
       for (const name of book.authors) {
         const key = normalizedKey(name) || "unknown-author";
         const author = authors.get(key) || { id: `author-${shortHash(key)}`, name, books: [] };
-        author.books.push(summary(book));
+        author.books.push(summarizeBook(book));
         authors.set(key, author);
       }
     }
@@ -401,7 +431,7 @@ export class VaultRepository {
     const books = await this.scanBooks();
     return {
       vaultPath: this.vaultPath,
-      books: books.map(summary).sort((left, right) => {
+      books: books.map(summarizeBook).sort((left, right) => {
         const byRecentActivity = (right.lastClippingAt || "").localeCompare(left.lastClippingAt || "");
         return byRecentActivity || left.title.localeCompare(right.title);
       }),
@@ -507,8 +537,13 @@ export class VaultRepository {
   }
 
   async commitImport(token: string): Promise<ImportCommitResult> {
+    return this.enqueueWrite(() => this.commitImportUnlocked(token));
+  }
+
+  private async commitImportUnlocked(token: string): Promise<ImportCommitResult> {
     const session = this.sessions.get(token);
     if (!session) throw new Error("The import preview has expired");
+    this.invalidate();
     const books = await this.scanBooks();
     const bySourceKey = new Map<string, BookRecord>();
     const byIdentity = new Map<string, ClippingRecord[]>();
@@ -595,33 +630,44 @@ export class VaultRepository {
   }
 
   async updateBook(bookId: string, patch: BookPatch): Promise<BookRecord> {
-    const book = await this.getBook(bookId);
+    return this.enqueueWrite(() => this.updateBookUnlocked(bookId, patch));
+  }
+
+  private async updateBookUnlocked(bookId: string, patch: BookPatch): Promise<BookRecord> {
+    const book = await this.currentBook(bookId);
     if (!book?.vaultPath) throw new Error("Book not found");
     Object.assign(book, patch);
     book.title = book.title.trim() || "Untitled";
     book.authors = book.authors.map((author) => author.trim()).filter(Boolean);
     book.tags = [...new Set(book.tags.map((tag) => tag.trim()).filter(Boolean))];
     book.rating = Math.max(0, Math.min(5, Math.round(book.rating)));
-    let markdown = await readFile(book.vaultPath, "utf8");
+    const originalMarkdown = await readFile(book.vaultPath, "utf8");
+    let markdown = originalMarkdown;
     markdown = replaceFrontmatter(markdown, book);
     if (markdown.includes(BOOK_IDENTITY_START) && markdown.includes(BOOK_IDENTITY_END)) {
       markdown = replaceBetween(markdown, BOOK_IDENTITY_START, BOOK_IDENTITY_END, bookIdentityMarkdown(book));
     }
     if (patch.reflection !== undefined) markdown = replaceBetween(markdown, BOOK_REFLECTION_START, BOOK_REFLECTION_END, book.reflection);
-    await atomicWriteBook(book.vaultPath, markdown, book);
+    await atomicWriteBookIfCurrent(book.vaultPath, originalMarkdown, markdown, book);
     this.invalidate();
     await this.rebuildDerivedNotes(await this.scanBooks());
     return (await this.getBook(bookId)) as BookRecord;
   }
 
   async updateClipping(bookId: string, clippingId: string, patch: ClippingPatch): Promise<ClippingRecord> {
-    const book = await this.getBook(bookId);
+    return this.enqueueWrite(() => this.updateClippingUnlocked(bookId, clippingId, patch));
+  }
+
+  private async updateClippingUnlocked(bookId: string, clippingId: string, patch: ClippingPatch): Promise<ClippingRecord> {
+    const book = await this.currentBook(bookId);
     if (!book?.vaultPath) throw new Error("Book not found");
-    const clip = book.clippings.find((candidate) => candidate.id === clippingId);
+    const originalMarkdown = await readFile(book.vaultPath, "utf8");
+    const currentBook = parseBookMarkdown(originalMarkdown, book.vaultPath);
+    const clip = currentBook.clippings.find((candidate) => candidate.id === clippingId);
     if (!clip) throw new Error("Clipping not found");
     Object.assign(clip, patch);
     clip.tags = [...new Set(clip.tags.map((tag) => tag.trim()).filter(Boolean))];
-    let markdown = await readFile(book.vaultPath, "utf8");
+    let markdown = originalMarkdown;
     const blockStart = markdown.indexOf(`<!-- reading-desk:clipping:start id="${clip.id}"`);
     const blockEnd = markdown.indexOf(`<!-- reading-desk:clipping:end id="${clip.id}" -->`, blockStart);
     if (blockStart < 0 || blockEnd < 0) throw new Error("Clipping markers are missing");
@@ -629,26 +675,75 @@ export class VaultRepository {
     const updatedBlock = renderClippingBlock(clip);
     markdown = `${markdown.slice(0, blockStart)}${updatedBlock}${markdown.slice(blockEnd + `<!-- reading-desk:clipping:end id="${clip.id}" -->`.length)}`;
     if (!originalBlock) throw new Error("Clipping block could not be read");
-    await atomicWriteBook(book.vaultPath, markdown, book);
+    await atomicWriteBookIfCurrent(book.vaultPath, originalMarkdown, markdown, currentBook);
     this.invalidate();
     return clip;
   }
 
   async mergeBooks(sourceBookId: string, targetBookId: string): Promise<AppSnapshot> {
+    return this.enqueueWrite(() => this.mergeBooksUnlocked(sourceBookId, targetBookId));
+  }
+
+  private async mergeBooksUnlocked(sourceBookId: string, targetBookId: string): Promise<AppSnapshot> {
     if (sourceBookId === targetBookId) return this.snapshot();
+    this.invalidate();
     const books = await this.scanBooks();
     const source = books.find((book) => book.id === sourceBookId);
     const target = books.find((book) => book.id === targetBookId);
     if (!source?.vaultPath || !target?.vaultPath) throw new Error("Both books must exist");
-    const existing = new Set(target.clippings.map((clip) => `${clip.identityKey}:${clip.contentHash}`));
-    target.clippings.push(...source.clippings.filter((clip) => !existing.has(`${clip.identityKey}:${clip.contentHash}`)));
+
+    const sourceMarkdown = await readFile(source.vaultPath, "utf8");
+    const targetMarkdown = await readFile(target.vaultPath, "utf8");
+    const currentSource = parseBookMarkdown(sourceMarkdown, source.vaultPath);
+    const currentTarget = parseBookMarkdown(targetMarkdown, target.vaultPath);
+    const existing = new Set(currentTarget.clippings.map((clip) => `${clip.identityKey}:${clip.contentHash}`));
+    const additions = currentSource.clippings.filter((clip) => !existing.has(`${clip.identityKey}:${clip.contentHash}`));
+    target.clippings = [...currentTarget.clippings, ...additions];
     target.sourceKeys = [...new Set([...target.sourceKeys, ...source.sourceKeys])];
     target.aliases = [...new Set([...target.aliases, source.title, ...source.aliases])];
-    if (source.reflection) target.reflection = [target.reflection, `### From ${source.title}`, source.reflection].filter(Boolean).join("\n\n");
+    target.reflection = currentTarget.reflection;
+    if (currentSource.reflection) target.reflection = [target.reflection, `### From ${source.title}`, currentSource.reflection].filter(Boolean).join("\n\n");
     const dates = bookDates(target.clippings);
     target.firstClippingAt = dates.first;
     target.lastClippingAt = dates.last;
-    await atomicWriteBook(target.vaultPath, renderBookMarkdown(target), target);
+
+    let mergedMarkdown = targetMarkdown;
+    for (const addition of [...additions].sort(compareClippings)) {
+      const current = parseBookMarkdown(mergedMarkdown).clippings;
+      const next = current.sort(compareClippings).find((candidate) => compareClippings(addition, candidate) < 0);
+      const insertionIndex = next
+        ? mergedMarkdown.indexOf(`<!-- reading-desk:clipping:start id="${next.id}"`)
+        : mergedMarkdown.indexOf(CLIPPINGS_END);
+      if (insertionIndex < 0) throw new Error(`Cannot merge into ${target.title}: clipping region is missing`);
+      mergedMarkdown = `${mergedMarkdown.slice(0, insertionIndex).trimEnd()}\n\n${renderClippingBlock(addition)}\n\n${mergedMarkdown.slice(insertionIndex).trimStart()}`;
+    }
+    mergedMarkdown = replaceFrontmatter(mergedMarkdown, target);
+    if (mergedMarkdown.includes(BOOK_IDENTITY_START) && mergedMarkdown.includes(BOOK_IDENTITY_END)) {
+      mergedMarkdown = replaceBetween(mergedMarkdown, BOOK_IDENTITY_START, BOOK_IDENTITY_END, bookIdentityMarkdown(target));
+    }
+    mergedMarkdown = replaceBetween(mergedMarkdown, BOOK_REFLECTION_START, BOOK_REFLECTION_END, target.reflection);
+
+    const backupDirectory = path.join(this.metadataPath, "backups", "merges", `${new Date().toISOString().replace(/[:.]/g, "-")}--${randomUUID()}`);
+    await mkdir(backupDirectory, { recursive: true });
+    const sourceBackup = path.join(backupDirectory, `source--${path.basename(source.vaultPath)}`);
+    const targetBackup = path.join(backupDirectory, `target--${path.basename(target.vaultPath)}`);
+    await Promise.all([
+      writeFile(sourceBackup, sourceMarkdown, "utf8"),
+      writeFile(targetBackup, targetMarkdown, "utf8"),
+      writeFile(path.join(backupDirectory, "manifest.json"), `${JSON.stringify({
+        createdAt: new Date().toISOString(),
+        sourceBookId,
+        sourcePath: source.vaultPath,
+        sourceBackup,
+        targetBookId,
+        targetPath: target.vaultPath,
+        targetBackup,
+      }, null, 2)}\n`, "utf8"),
+    ]);
+
+    await assertFileCurrent(source.vaultPath, sourceMarkdown, backupDirectory);
+    await atomicWriteBookIfCurrent(target.vaultPath, targetMarkdown, mergedMarkdown, target, backupDirectory);
+    await assertFileCurrent(source.vaultPath, sourceMarkdown, backupDirectory);
     const archived = path.join(this.metadataPath, "merged", `${path.basename(source.vaultPath, ".md")}--${Date.now()}.md`);
     await rename(source.vaultPath, archived);
     this.invalidate();
@@ -657,12 +752,17 @@ export class VaultRepository {
   }
 
   async mergeAuthors(sourceName: string, targetName: string): Promise<AppSnapshot> {
+    return this.enqueueWrite(() => this.mergeAuthorsUnlocked(sourceName, targetName));
+  }
+
+  private async mergeAuthorsUnlocked(sourceName: string, targetName: string): Promise<AppSnapshot> {
+    this.invalidate();
     const books = await this.scanBooks();
     const sourceKey = normalizedKey(sourceName);
     for (const book of books) {
       if (!book.authors.some((author) => normalizedKey(author) === sourceKey)) continue;
       book.authors = [...new Set(book.authors.map((author) => normalizedKey(author) === sourceKey ? targetName : author))];
-      await this.updateBook(book.id, { authors: book.authors });
+      await this.updateBookUnlocked(book.id, { authors: book.authors });
     }
     return this.snapshot();
   }

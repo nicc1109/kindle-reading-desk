@@ -53,3 +53,9 @@ To publish a version:
 4. Push the commit and tag: `git push origin main --follow-tags`.
 
 The Windows release workflow builds the installer, runs the tests, and attaches the `.exe`, `.blockmap`, and `latest.yml` update metadata to a normal GitHub Release. Releases must not be marked as prereleases because stable installed copies ignore prerelease updates.
+
+## Google Docs export (integration prepared)
+
+Use the export icon in a book header to preview all highlights in bold, with normal-weight Notes paragraphs. Creating a real Google Doc requires the desktop OAuth configuration. See [setup and verification](docs/GOOGLE-DOCS.md). Each export creates a new document and does not overwrite annotations.
+
+See the [project review and monetization proposal](docs/REVISION-2026-09-20.md) for findings, priorities, and outstanding validation.

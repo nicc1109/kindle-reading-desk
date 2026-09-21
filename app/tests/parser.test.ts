@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { compareClippings, parseClippingsFile, parseKindleDate } from "../electron/core/parser";
+import { compareClippings, normalizedKey, parseClippingsFile, parseKindleDate } from "../electron/core/parser";
 
 describe("Kindle clipping parser", () => {
   it("parses Spanish and English metadata variants", () => {
@@ -68,5 +68,41 @@ describe("Kindle clipping parser", () => {
 
   it("handles localized dates without relying on the operating-system locale", () => {
     expect(parseKindleDate("miércoles, 1 de noviembre de 2023 06:32:46")).toBe("2023-11-01T06:32:46.000Z");
+  });
+
+  it("keeps non-Latin identity keys distinct and parses German and French metadata", () => {
+    expect(normalizedKey("東京の本")).toBe("東京の本");
+    expect(normalizedKey("Москва")).toBe("москва");
+    expect(normalizedKey("東京の本")).not.toBe(normalizedKey("Москва"));
+
+    const result = parseClippingsFile([
+      "Denken (Hannah Arendt)",
+      "- Ihre Markierung auf Seite 12 | Position 33-34 | Hinzugefügt am Samstag, 14. Oktober 2023 16:15:54",
+      "",
+      "Ein deutscher Text.",
+      "==========",
+      "Penser (Simone Weil)",
+      "- Votre surlignement à la page 7 | Emplacement 20 | Ajouté le samedi 14 octobre 2023 16:15:54",
+      "",
+      "Un texte français.",
+      "==========",
+    ].join("\n"));
+
+    expect(result.clippings).toHaveLength(2);
+    expect(result.clippings[0]).toMatchObject({ type: "highlight", pageStart: "12", locationStart: 33, addedAt: "2023-10-14T16:15:54.000Z" });
+    expect(result.clippings[1]).toMatchObject({ type: "highlight", pageStart: "7", locationStart: 20, addedAt: "2023-10-14T16:15:54.000Z" });
+    expect(result.books[0].sourceKey).not.toBe(result.books[1].sourceKey);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("warns when a heading leaves author metadata ambiguous", () => {
+    const result = parseClippingsFile([
+      "作者不明の本",
+      "- Your Highlight on page 1 | Location 1 | Added on Monday, January 1, 2024 01:00:00 PM",
+      "",
+      "本文",
+      "==========",
+    ].join("\n"));
+    expect(result.warnings).toContainEqual(expect.objectContaining({ message: "Could not infer the author from the book heading" }));
   });
 });

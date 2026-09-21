@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-09-20T21:32:44.9633930Z",
+  "command": "npm audit --json",
+  "counts": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "note": "Controlled direct and transitive dependency upgrades completed; npm audit reports no known vulnerabilities.",
+  "packages": {}
+}

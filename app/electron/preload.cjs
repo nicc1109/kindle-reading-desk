@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const api = {
+  getGoogleDocsAvailability: () => ipcRenderer.invoke("google-docs:availability"),
+  exportBookToGoogleDocs: (bookId) => ipcRenderer.invoke("google-docs:export", bookId),
+  cancelGoogleDocsExport: () => ipcRenderer.invoke("google-docs:cancel"),
   getSnapshot: () => ipcRenderer.invoke("app:snapshot"),
   getBook: (bookId) => ipcRenderer.invoke("app:get-book", bookId),
   selectVault: () => ipcRenderer.invoke("vault:select"),

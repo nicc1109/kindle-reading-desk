@@ -1,3 +1,5 @@
+import type { GoogleDocsAvailability, GoogleDocsExportResult } from "./google-docs.js";
+
 export type BookStatus = "Reading" | "Finished" | "Paused" | "Reference";
 export type ClippingType = "highlight" | "note" | "bookmark" | "unknown";
 
@@ -49,7 +51,6 @@ export interface BookSummary {
   clippingCount: number;
   firstClippingAt?: string;
   lastClippingAt?: string;
-  searchText?: string;
 }
 
 export interface AuthorRecord {
@@ -119,6 +120,12 @@ export interface AppSnapshot {
   books: BookSummary[];
   authors: AuthorRecord[];
   imports: ImportHistoryEntry[];
+  vaultWatch?: VaultWatchState;
+}
+
+export interface VaultWatchState {
+  status: "watching" | "error" | "stopped";
+  message?: string;
 }
 
 export type AppUpdateStage =
@@ -157,6 +164,9 @@ export interface ClippingPatch {
 }
 
 export interface ReadingDeskApi {
+  getGoogleDocsAvailability(): Promise<GoogleDocsAvailability>;
+  exportBookToGoogleDocs(bookId: string): Promise<GoogleDocsExportResult>;
+  cancelGoogleDocsExport(): Promise<void>;
   getSnapshot(): Promise<AppSnapshot>;
   getBook(bookId: string): Promise<BookRecord | null>;
   selectVault(): Promise<AppSnapshot>;

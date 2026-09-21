@@ -19,4 +19,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - There is no separate full-page book mode. Independent pane visibility and resizing provide the workspace controls.
 - List rows are explicitly excerpts; the selected clipping view must always render the complete text stored in My Clippings.txt.
 - The Obsidian vault is canonical. Existing clipping blocks are append-only during imports; user-authored Markdown outside managed regions must be preserved.
-- The first release is local-only, English UI, and has no account, analytics, cloud database, external metadata lookup, or AI feature.
+- The app is local-first with English UI and has no required account, analytics, cloud database, external metadata lookup, or AI feature. Optional per-book Google Docs export is authorized: all highlights are bold, with normal-weight paragraphs for subsequent annotations. Each export creates a new document and does not overwrite annotations in existing documents. Google OAuth configuration is pending; keep the preview usable without credentials.

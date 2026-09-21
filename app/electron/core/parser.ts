@@ -37,6 +37,21 @@ const ENGLISH_MONTHS: Record<string, number> = {
   december: 11,
 };
 
+const OTHER_MONTHS: Record<string, number> = {
+  januar: 0, janvier: 0, gennaio: 0,
+  februar: 1, février: 1, fevrier: 1, febbraio: 1,
+  märz: 2, maerz: 2, mars: 2, marzo: 2,
+  april: 3, avril: 3, aprile: 3,
+  mai: 4, maggio: 4,
+  juni: 5, juin: 5, giugno: 5,
+  juli: 6, juillet: 6, luglio: 6,
+  august: 7, août: 7, aout: 7, agosto: 7,
+  september: 8, septembre: 8, settembre: 8,
+  oktober: 9, octobre: 9, ottobre: 9,
+  november: 10, novembre: 10,
+  dezember: 11, décembre: 11, decembre: 11, dicembre: 11,
+};
+
 export function normalizeText(value: string): string {
   return value
     .normalize("NFKC")
@@ -51,7 +66,7 @@ export function normalizedKey(value: string): string {
     .toLocaleLowerCase("en")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
 
@@ -95,9 +110,9 @@ export function parseBookHeading(sourceTitle: string): { title: string; authors:
 }
 
 function clippingType(metadata: string): ClippingType {
-  if (/\b(subrayado|resaltado|highlight)\b/i.test(metadata)) return "highlight";
-  if (/\b(nota|note)\b/i.test(metadata)) return "note";
-  if (/\b(marcador|bookmark)\b/i.test(metadata)) return "bookmark";
+  if (/\b(subrayado|resaltado|highlight|markierung|surlignement|evidenziazione)\b/iu.test(metadata)) return "highlight";
+  if (/\b(nota|note|notiz)\b/iu.test(metadata)) return "note";
+  if (/\b(marcador|bookmark|lesezeichen|signet|segnalibro)\b/iu.test(metadata)) return "bookmark";
   return "unknown";
 }
 
@@ -135,6 +150,12 @@ export function parseKindleDate(raw: string): string | undefined {
   if (english) {
     const month = ENGLISH_MONTHS[english[1].toLowerCase()];
     if (month !== undefined) return dateToIso(Number(english[3]), month, Number(english[2]), english[4], english[5]);
+  }
+  const european = value.match(/(?:[\p{L}.]+,?\s*)?(\d{1,2})\.?\s+([\p{L}]+)\s+(\d{4})\s+(\d{1,2}:\d{2}:\d{2})/iu);
+  if (european) {
+    const monthKey = european[2].toLocaleLowerCase("en");
+    const month = OTHER_MONTHS[monthKey] ?? OTHER_MONTHS[normalizedKey(monthKey)];
+    if (month !== undefined) return dateToIso(Number(european[3]), month, Number(european[1]), european[4]);
   }
   return undefined;
 }
@@ -190,9 +211,9 @@ export function parseClippingsFile(input: string): ParseResult {
     const metadata = normalizeText(lines[metadataIndex]);
     const content = lines.slice(metadataIndex + 1).join("\n").trim();
     const type = clippingType(metadata);
-    const [pageStart, pageEnd] = parseRange(metadata.match(/(?:p[aá]gina|page)\s+([ivxlcdm\d]+)(?:-([ivxlcdm\d]+))?/i));
-    const [locationStart, locationEnd] = parseNumberRange(metadata.match(/(?:posici[oó]n|location)\s+(\d+)(?:-(\d+))?/i));
-    const dateMatch = metadata.match(/(?:A[ñn]adido el|Added on)\s+(.+)$/i);
+    const [pageStart, pageEnd] = parseRange(metadata.match(/(?:p[aá]gina|page|seite|pagina)\s+([ivxlcdm\d]+)(?:-([ivxlcdm\d]+))?/iu));
+    const [locationStart, locationEnd] = parseNumberRange(metadata.match(/(?:posici[oó]n|location|position|emplacement|posizione)\s+(\d+)(?:-(\d+))?/iu));
+    const dateMatch = metadata.match(/(?:A[ñn]adido el|Added on|Hinzugef[uü]gt am|Ajout[ée] le|Aggiunto il)\s+(.+)$/iu);
     const addedAtRaw = dateMatch?.[1]?.trim();
     const addedAt = addedAtRaw ? parseKindleDate(addedAtRaw) : undefined;
     const parsedBook = parseBookHeading(sourceTitle);
@@ -218,6 +239,9 @@ export function parseClippingsFile(input: string): ParseResult {
     }
     if (!content && type !== "bookmark") {
       warnings.push({ block: index + 1, title: sourceTitle, message: `${type === "highlight" ? "Highlight" : "Note"} has no text in the source file` });
+    }
+    if (parsedBook.authors.length === 1 && parsedBook.authors[0] === "Unknown author") {
+      warnings.push({ block: index + 1, title: sourceTitle, message: "Could not infer the author from the book heading" });
     }
 
     books.set(bookSourceKey, { sourceKey: bookSourceKey, sourceTitle, ...parsedBook });

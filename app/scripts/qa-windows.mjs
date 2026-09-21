@@ -1,4 +1,5 @@
 import { _electron as electron } from "playwright";
+import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -75,6 +76,8 @@ try {
 
   await window.screenshot({ path: output });
   checks.push(["native Windows screenshot captured", true]);
+  for (const [name, passed] of checks) assert.equal(passed, true, `Windows QA failed: ${name}`);
+  assert.deepEqual(runtimeErrors, [], `Windows QA observed renderer errors:\n${runtimeErrors.join("\n")}`);
   console.log(JSON.stringify({ executablePath, output, checks }, null, 2));
 } finally {
   await app?.close();

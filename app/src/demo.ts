@@ -142,6 +142,7 @@ const demoUpdateState: AppUpdateState = {
 function snapshot(): AppSnapshot {
   return {
     vaultPath,
+    vaultWatch: { status: "watching" },
     books: books.map(makeSummary).sort((a, b) =>
       (b.lastClippingAt || "").localeCompare(a.lastClippingAt || "") || a.title.localeCompare(b.title)),
     authors: buildAuthors(),
@@ -158,6 +159,9 @@ function snapshot(): AppSnapshot {
 }
 
 export const demoApi: ReadingDeskApi = {
+  getGoogleDocsAvailability: async () => ({ available: false, message: "Document preview only. Export to Google Docs is available in the configured desktop app." }),
+  exportBookToGoogleDocs: async () => { throw new Error("Use the configured desktop app to export to Google Docs."); },
+  cancelGoogleDocsExport: async () => undefined,
   getSnapshot: async () => snapshot(),
   getBook: async (bookId) => structuredClone(books.find((book) => book.id === bookId) || null),
   selectVault: async () => { vaultPath = "C:\\Users\\Reader\\Documents\\Reading Desk Vault"; return snapshot(); },

@@ -4,9 +4,11 @@
 # Local secrets and operating-system metadata.
 .env
 .env.*
+google-oauth-client.json
 !.env.example
 Thumbs.db
 .DS_Store
 
 # Generated QA screenshots.
 /app/*-qa*.png
+/app/release-security-qa/
