@@ -257,7 +257,10 @@ function registerIpc(): void {
     const book = await requireRepository().getBook(requireString(bookId, "book ID"));
     if (!book?.vaultPath) return false;
     try {
-      await shell.openExternal(`obsidian://open?path=${encodeURIComponent(book.vaultPath)}`);
+      const vault = requireRepository().vaultPath;
+      const file = path.relative(vault, book.vaultPath).replace(/\\/g, "/").replace(/\.md$/i, "");
+      const uri = `obsidian://open?${new URLSearchParams({ vault: path.basename(vault), file }).toString()}`;
+      await shell.openExternal(uri);
       return true;
     } catch {
       shell.showItemInFolder(book.vaultPath);

@@ -73,7 +73,16 @@ function slugify(value: string): string {
 
 function quoteMarkdown(value: string): string {
   if (!value) return "> *(No text — Kindle bookmark)*";
-  return value.split("\n").map((line) => `> ${line}`).join("\n");
+  return value.split("\n").map((line) => {
+    // Kindle text is content, not Markdown. Escape syntax so a passage containing
+    // headings, emphasis, links, or lists keeps its original visual shape in Obsidian.
+    const escaped = line
+      .replace(/\\/g, "\\\\")
+      .replace(/([\x60*_{}\[\]()>#+!|~])/g, "\\$1")
+      .replace(/^(\s*)([-+])(?=\s)/, "$1\\$2")
+      .replace(/^(\s*)(\d+)\.(?=\s)/, "$1$2\\.");
+    return `> ${escaped}`;
+  }).join("\n");
 }
 
 export function summarizeBook(book: BookRecord): BookSummary {
@@ -240,6 +249,7 @@ export function parseBookMarkdown(markdown: string, vaultPath?: string): BookRec
         .split("\n")
         .map((line) => line.replace(/^> ?/, ""))
         .join("\n")
+        .replace(/\\([\x60*_{}\[\]()>#+!|~]|[-+]|\\.)/g, "$1")
         .replace(/^\*\(No text — Kindle bookmark\)\*$/, "")
         .trim();
       const clippingReflection = between(

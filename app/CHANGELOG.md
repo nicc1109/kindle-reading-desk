@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-09-21
+
+- Added the prepared Google Docs export flow to the packaged release path.
+- Fixed Obsidian deep links to open the correct vault-relative book file.
+- Preserved Kindle highlight text literally when it contains Markdown punctuation.
+- Bumped the packaged app version so the Windows updater can discover this release.
+
 ## 0.2.7 - 2026-08-12
 
 - Updated packaged Windows verification for the new on-demand Notes editor.
