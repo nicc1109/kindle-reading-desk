@@ -10,6 +10,7 @@
 - Added a backup-backed schema v4 repair for previously generated Markdown notes.
 - Bumped the packaged app version so the Windows updater can discover this release.
 - Made installer naming deterministic and added release-manifest hash and size verification before publishing.
+- Fixed inactive library layout remaining visible on secondary screens at some Windows display sizes.
 
 ## 0.2.7 - 2026-08-12
 

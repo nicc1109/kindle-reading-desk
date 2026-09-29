@@ -59,6 +59,8 @@ try {
   await window.getByRole("button", { name: /Constraints/ }).waitFor({ state: "visible", timeout: 10000 });
   checks.push(["author page lists imported book", true]);
   await window.getByRole("button", { name: "Reading insights" }).click();
+  await window.locator(".library-route").waitFor({ state: "hidden", timeout: 10000 });
+  checks.push(["inactive library layout hidden", true]);
   await window.getByRole("heading", { name: "A quiet view of your reading" }).waitFor({ state: "visible", timeout: 10000 });
   checks.push(["reading insights rendered", true]);
   await window.getByRole("button", { name: "Settings" }).click();
