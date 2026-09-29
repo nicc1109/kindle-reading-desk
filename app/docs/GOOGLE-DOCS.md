@@ -21,8 +21,8 @@ La vista del navegador es una demostración y ofrece una vista previa; la integr
 1. Crear o seleccionar el proyecto de Reading Desk en Google Cloud.
 2. Habilitar **Google Docs API** y configurar la pantalla de consentimiento. Mientras esté en modo de prueba, agregar la cuenta que se usará como usuario de prueba.
 3. Crear un cliente OAuth de tipo **Desktop app** y descargar su JSON con la propiedad raíz `installed`. Un cliente de tipo web no sirve para este flujo.
-4. Guardar ese JSON fuera del repositorio. Para desarrollo, definir `READING_DESK_GOOGLE_OAUTH_CONFIG` con su ruta absoluta antes de ejecutar Electron. Como alternativa, guardarlo como `%APPDATA%\Reading Desk\google-oauth-client.json`.
-5. Para la aplicación instalada de Windows, colocar el mismo archivo en `%APPDATA%\Reading Desk\google-oauth-client.json` y reiniciar Reading Desk. Es el directorio `app.getPath("userData")` de la instalación normal. Si se inicia con `--user-data-dir`, el archivo va en ese directorio personalizado. La variable `READING_DESK_GOOGLE_OAUTH_CONFIG` también funciona para un ejecutable iniciado desde un entorno que la defina.
+4. Guardar ese JSON fuera del repositorio. Para desarrollo, definir `READING_DESK_GOOGLE_OAUTH_CONFIG` con su ruta absoluta antes de ejecutar Electron. Como alternativa, guardarlo como `%APPDATA%\kindle-reading-desk\google-oauth-client.json`.
+5. Para la aplicación instalada de Windows, colocar el mismo archivo en `%APPDATA%\kindle-reading-desk\google-oauth-client.json` y reiniciar Reading Desk. Es el directorio `app.getPath("userData")` de la instalación normal; comprobar la ruta exacta en el aviso de configuración de la app si se usa otra instalación. Si se inicia con `--user-data-dir`, el archivo va en ese directorio personalizado. La variable `READING_DESK_GOOGLE_OAUTH_CONFIG` también funciona para un ejecutable iniciado desde un entorno que la defina.
 6. Iniciar la aplicación y verificar que el diálogo ya no muestre el aviso de configuración pendiente.
 
 Ejemplo local en PowerShell, adaptando la ruta a un archivo real:
